@@ -1,0 +1,13 @@
+name = "OptimalEstimationProject"
+uuid = "3d1b1f1a-7e11-45f0-8494-bf27496a6cf9"
+authors = ["Grant Hecht"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
