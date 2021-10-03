@@ -3,6 +3,10 @@ uuid = "3d1b1f1a-7e11-45f0-8494-bf27496a6cf9"
 authors = ["Grant Hecht"]
 version = "0.1.0"
 
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+IndirectTrajOpt = "99e47ffd-a99c-4d17-8b51-d4481b168213"
+
 [compat]
 julia = "1"
 

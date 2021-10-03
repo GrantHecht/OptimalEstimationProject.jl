@@ -1,5 +1,9 @@
 module OptimalEstimationProject
 
-# Write your package code here.
+using DataFrames
+
+include("GPS/readSP3.jl")
+
+export readSP3
 
 end
