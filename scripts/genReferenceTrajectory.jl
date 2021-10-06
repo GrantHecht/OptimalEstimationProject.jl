@@ -3,9 +3,9 @@ using DrWatson
 @quickactivate "OptimalEstimationProject"
 using IndirectTrajOpt
 
-function genRefTrajs(swarmSize, numTrials)
+function genRefTrajs(swarmSize, numTrials, tf)
    # Set tspan in days
-   tspan = (0.0, 9.0) # [Days]
+   tspan = (0.0, tf) # [Days]
 
    # Grab parameters for scaling
    pTemp = IndirectTrajOpt.initCR3BPIndirectParams("Low Thrust 10 CR3BP")
@@ -17,7 +17,7 @@ function genRefTrajs(swarmSize, numTrials)
    ics = [-0.019488511458668, -0.016033479812051, 0.0,
            8.918881923678198, -4.081793688818725, 0.0,
            1.0] 
-   fcs = [(1.0 - μ) - 247.122/LU, 0.0/LU, 4493.209/LU, 0.0*(TU/LU), 1.444467*(TU/LU), 0.0*(TU/LU), 0.0]
+   fcs = [(1.0 - μ) + 6060.483/LU, 19452.284/LU, -34982.968/LU, 0.082677*(TU/LU), 0.006820*(TU/LU), -0.368434*(TU/LU), 0.0]
 
    # Homotopy continuation 
    N = 20
@@ -33,10 +33,11 @@ function genRefTrajs(swarmSize, numTrials)
        initOptimizer    = :PSO,
        initCostFunc     = :WSS,
        numParticles     = swarmSize,
-       UBs              = [100, 100, 10, 10, 10, 10, 10],
-       LBs              = [-100, -100, -10, -10, -10, -10, 0],
-       iUBs             = [40, 40, 2, 2, 2, 2, 2],
-       iLBs             = [-40, -40, -2, -2, -2, -2, 0],
+       numSwarms        = 8,
+       UBs              = [150, 150, 20, 20, 20, 20, 20],
+       LBs              = [-150, -150, -20, -20, -20, -20, 0],
+       #iUBs             = [40, 40, 2, 2, 2, 2, 2],
+       #iLBs             = [-40, -40, -2, -2, -2, -2, 0],
        weights          = [10, 10, 10, 1, 1, 1, 1],
        MFD              = 1.0,
        displayInterval  = 5,
@@ -46,7 +47,7 @@ function genRefTrajs(swarmSize, numTrials)
        maxIters         = 5000,
        maxTime          = 1800.0,
        homotopyParamVec = hVec,
-       dataFolder       = datadir("numParticles"*string(swarmSize)),
+       dataFolder       = datadir("numParticles"*string(swarmSize)*"_tf"*replace(string(tf), '.' => 'p')),
        writeData        = true) for i in 1:numTrials];
    
    # Initialize all co-states 

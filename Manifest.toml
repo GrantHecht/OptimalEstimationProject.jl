@@ -363,7 +363,7 @@ uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[Heuristics]]
 deps = ["BenchmarkTools", "Format", "Random", "StaticArrays", "ThreadPools"]
-path = "../Heuristics.jl"
+path = "C:\\\\Users\\\\granthec\\\\.julia\\\\dev\\\\Heuristics.jl"
 uuid = "6acb60cf-2fd4-4316-b77c-a68f9bfdd616"
 version = "0.1.0"
 
@@ -392,21 +392,19 @@ version = "0.1.0"
 
 [[IndirectCoStateInit]]
 deps = ["Heuristics", "Reexport", "StaticArrays"]
-path = "../IndirectCoStateInit.jl"
+path = "C:\\\\Users\\\\granthec\\\\.julia\\\\dev\\\\IndirectCoStateInit.jl"
 uuid = "21a510a3-10c0-42ba-9160-0f1f186b68a8"
 version = "0.1.0"
 
 [[IndirectShooting]]
 deps = ["NLsolve"]
-path = "../IndirectShooting.jl"
+path = "C:\\\\Users\\\\granthec\\\\.julia\\\\dev\\\\IndirectShooting"
 uuid = "552ddee8-f2c8-412c-9a93-d98e9622e980"
 version = "0.1.0"
 
 [[IndirectTrajOpt]]
 deps = ["BSON", "BenchmarkTools", "DataFrames", "DifferentialEquations", "ForwardDiff", "IndirectCoStateInit", "IndirectShooting", "JLD2", "LinearAlgebra", "LoopVectorization", "Octavian", "ProgressMeter", "Reexport", "StaticArrays", "Suppressor"]
-git-tree-sha1 = "1eab7688b9ba967d223ebf4ea0a30522cb27fbf1"
-repo-rev = "dev"
-repo-url = "C:\\Users\\grant\\.julia\\dev\\IndirectTrajOpt.jl"
+path = "C:\\\\Users\\\\granthec\\\\.julia\\\\dev\\\\IndirectTrajOpt.jl"
 uuid = "99e47ffd-a99c-4d17-8b51-d4481b168213"
 version = "0.1.1"
 
@@ -542,6 +540,12 @@ deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensio
 git-tree-sha1 = "c2c1a765d943267ffc01fd6a127fcb482e80f63a"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
 version = "0.12.82"
+
+[[MATLAB]]
+deps = ["Libdl", "SparseArrays"]
+git-tree-sha1 = "9edb97bacd74c960b27d6fd230e139689fdc4a7b"
+uuid = "10e44e05-a98a-55b3-a45b-ba969058deb6"
+version = "0.8.2"
 
 [[MacroTools]]
 deps = ["Markdown", "Random"]
