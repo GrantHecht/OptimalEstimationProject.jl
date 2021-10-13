@@ -5,7 +5,7 @@ using IndirectTrajOpt
 
 function genRefTrajs(swarmSize, numTrials)
    # Set tspan in days
-   tspan = (0.0, 9.0) # [Days]
+   tspan = (0.0, 9.1) # [Days]
 
    # Grab parameters for scaling
    pTemp = IndirectTrajOpt.initCR3BPIndirectParams("Low Thrust 10 CR3BP")

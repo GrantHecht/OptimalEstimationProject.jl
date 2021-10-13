@@ -1,8 +1,16 @@
 
-function readSP3(sp3File::String)
+function readSP3(gpsWeek, day)
+
+    # Construct string
+    sp3File = datadir("igs") * "\\igs" * string(gpsWeek) * string(day) * ".sp3"
+    if !isfile(sp3File)
+        throw(ErrorException("The file 'igs"*string(gpsWeek)*string(day)*".sp3' does not exist in the folder ./data/igs and must be downloaded from CDDIS.\n" * 
+        "The file can be found at 'https://cddis.nasa.gov/archive/gnss/products/'"))
+    end
 
     # Instantiate Data Frame 
     df = DataFrame(
+        MJD     = Float64[],
         Year    = Int[],
         Month   = Int[],
         Day     = Int[],
@@ -28,12 +36,13 @@ function readSP3(sp3File::String)
     baseClk = 0.0
 
     # Date and time 
+    MJD     = 0.0
     Year    = 0
     Month   = 0
     Day     = 0
     Hour    = 0
     Min     = 0
-    Sec     = 0
+    Sec     = 0.0
 
     # Begin looping through lines in file 
     lineNum = 0
@@ -69,8 +78,13 @@ function readSP3(sp3File::String)
                     ClkstdExp   = NaN
                 end
 
+                # Compute MJD 
+                dayWithFrac = day + ((Sec/60.0 + Min)/60.0 + Hour)/24.0
+                MJD = gps2MJD(gpsWeek, dayWithFrac)
+
                 # Push to Data Frame
                 push!(df, Dict(
+                    "MJD"       => MJD,
                     "Year"      => Year,
                     "Month"     => Month,
                     "Day"       => Day,
@@ -98,5 +112,50 @@ function readSP3(sp3File::String)
     end
 
     close(f)
+    return df
+end
+
+function readSP3s(gpsWeekStart, weekDayStart, gpsWeekEnd, weekDayEnd)
+    # Handle gps weeks and week days
+    gpsWeeks        = gpsWeekStart:gpsWeekEnd
+    startWeekDays   = weekDayStart:6
+    endWeekDays     = 0:weekDayEnd
+
+    # Instantiate Data Frame 
+    df = DataFrame(
+        MJD     = Float64[],
+        Year    = Int[],
+        Month   = Int[],
+        Day     = Int[],
+        Hour    = Int[],
+        Min     = Int[],
+        Sec     = Float64[],
+        Sat     = Symbol[],
+        X       = Float64[],
+        Y       = Float64[],
+        Z       = Float64[],
+        Clk     = Float64[],
+        Xstd    = Float64[],
+        Ystd    = Float64[],
+        Zstd    = Float64[],
+        Clkstd  = Float64[]
+        )
+
+    @showprogress "Reading in sp3 files..." for week in gpsWeeks 
+        if week == gpsWeekStart 
+            for day in startWeekDays
+                df = vcat(df, readSP3(week, day))
+            end
+        elseif week == gpsWeekEnd 
+            for day in endWeekDays
+                df = vcat(df, readSP3(week, day))
+            end
+        else
+            for day in 1:6
+                df = vcat(df, readSP3(week, day))
+            end
+        end
+    end
+
     return df
 end
