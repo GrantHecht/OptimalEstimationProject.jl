@@ -4,11 +4,14 @@ authors = ["Grant Hecht"]
 version = "0.1.0"
 
 [deps]
-CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+Heuristics = "6acb60cf-2fd4-4316-b77c-a68f9bfdd616"
+IndirectCoStateInit = "21a510a3-10c0-42ba-9160-0f1f186b68a8"
+IndirectShooting = "552ddee8-f2c8-412c-9a93-d98e9622e980"
 IndirectTrajOpt = "99e47ffd-a99c-4d17-8b51-d4481b168213"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MATLAB = "10e44e05-a98a-55b3-a45b-ba969058deb6"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
