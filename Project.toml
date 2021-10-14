@@ -16,6 +16,7 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+DrWatson = "2"
 julia = "1"
 
 [extras]
