@@ -1,10 +1,18 @@
 module OptimalEstimationProject
 
 using DataFrames
+using IndirectTrajOpt
 using StaticArrays
 using LinearAlgebra
+using Roots
+using DataInterpolations
+using CSV
+using Tables
 using DrWatson
 using ProgressMeter
+using AstroTime; AstroTime.update()
+using EarthOrientation
+using MATLAB
 
 # Time Utilities
 include("TIME/gps2MJD.jl")
@@ -12,10 +20,20 @@ include("TIME/gps2MJD.jl")
 # GPS Simulation and Dependancies
 include("GPS/readSP3.jl")
 include("GPS/readERP.jl")
-include("GPS/gpsSimulator.jl")
+include("GPS/computePrecessionNutation.jl")
+include("GPS/rotateData.jl")
+include("GPS/genInterpolants.jl")
+include("GPS/GPSSimulator.jl")
+include("GPS/transmissionTimeFunction.jl")
 
-export readSP3
-export readSP3s
-export gpsSim
+# True Trajectory Dependancies
+include("TRUTH/SpacecraftSim.jl")
+
+# Precompilation
+precompile(GPSSim, (Int64, Int64, Int64, Int64))
+precompile(gpsMeasurement, (GPSSim,Int64,Int64,Int64,Int64))
+
+export GPSSim
+export plotGPS
 
 end

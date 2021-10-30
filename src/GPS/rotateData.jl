@@ -7,11 +7,19 @@ function rotateData(rawData::DataFrame, erps::Matrix)
     # Instantiate data matrix
     data = zeros(length(rawData.MJD), 10)
 
+    # Read in nutation data
+    Ax = CSV.File(datadir("tab5")*"\\Ax.txt"; delim = " ", ignorerepeated = true, header = 0) |> Tables.matrix
+    Ay = CSV.File(datadir("tab5")*"\\Ay.txt"; delim = " ", ignorerepeated = true, header = 0) |> Tables.matrix
+    As = CSV.File(datadir("tab5")*"\\As.txt"; delim = " ", ignorerepeated = true, header = 0) |> Tables.matrix
+
     # Loop through data and rotate
-    for i in 1:length(rawData.MJD)
+    @showprogress "Rotating ephemeris to J2000..." for i in 1:length(rawData.MJD)
+        # ===== Get epoch in TAI 
+        tai     = TAIEpoch(rawData.MJD[i]*days, origin=:modified_julian)
+
         # ===== First push data that does not require rotation to data matrix 
-        data[i,1]   = rawData.MDJ[i]
-        data[i,2]   = parse(Float64,replace(rawData.Sat[i], "G" => ""))
+        data[i,1]   = tai.second
+        data[i,2]   = parse(Float64, replace(string(rawData.Sat[i]), "G" => ""))
         data[i,6]   = rawData.Clk[i]
         data[i,10]  = rawData.Clkstd[i]
 
@@ -24,17 +32,18 @@ function rotateData(rawData::DataFrame, erps::Matrix)
         refMJD  = floor(data[i,1])
         dayFrac = data[i,1] % refMJD
         dayFrac < 0.5 ? (refMJD -= 0.5) : (refMJD += 0.5)
-        refIdx  = findmin(abs.(view(erps,:,1) - refMJD))[2]
+        refIdx  = findmin(abs.(view(erps,:,1) .- refMJD))[2]
 
         xp = (erps[refIdx,2] + dayFrac*erps[refIdx, 13]) * 10^-6 # (arcseconds)
-        yp = (erps[refIDx,3] + dayFrac*erps[refIdx, 14]) * 10^-6 # (arcseconds)
+        yp = (erps[refIdx,3] + dayFrac*erps[refIdx, 14]) * 10^-6 # (arcseconds)
 
-        # Compute T_TT (See Valaddo p195 - This may not be exactly correct, but plenty correct for the project... Correct 
-        # later if necessary)
-        T_TT = (data[i,1] + (2400000.5 - 2451545.0)) / 36525.0
+        # Compute T_TT
+        tt      = TTEpoch(tai)
+        jdtt    = julian(tt)
+        T_TT    = (jdtt.second / 86400.0 - 2451545.0) / 36525.0
 
         # Compute s'
-        sp =  -0.000047*T_TT # This is an approximation (See Valaddo p212 for exact)
+        sp =  -0.0015*(ac^2/1.2 + aa^2)*T_TT
 
         # Compute W
         cxp = cos(xp*arcSec2Rad)
@@ -53,27 +62,28 @@ function rotateData(rawData::DataFrame, erps::Matrix)
         W31 = sxp 
         W32 = -syp*cxp 
         W33 = cyp*cxp
-        W   = @SVector [W11 W12 W13; W21 W22 W23; W31 W32 W33]
+        W   = @SMatrix [W11 W12 W13; W21 W22 W23; W31 W32 W33]
 
         # ===== Compute Earth rotation matrix (R)
-        UTCmUTC = erps[refIdx, 4] + dayFrac*erps[refIdx, 5] # μs
+        ut1 = UT1Epoch(tai)
 
-        # Approximating here... need to more precicelly convert JDTT to JDUTC (if JDUTC contains leapseconds, need to include those)
-        JDUTC1day = floor(data[i,1])
-        JDUTC1frac = data[i,1] % JDUTC1day + UTCmUTC*1e-6/86400
-        if JDUTC1frac > 1
-            JDUTC1day += floor(JDUTC1frac)
-            JDUTC1frac -= floor(JDUTC1frac)
-        end
+        # Get Julian date 
+        JDut1 = julian(ut1)
     
-        θ = 2*π*(0.7790572732640 + 1.00273781191135448*(JDUT1day - 2451545) + 1.00273781191135448*JDUT1frac)
-        R = @SVector [ cos(-θ) sin(-θ) 0;
+        θ = 2*π*(0.7790572732640 + 1.00273781191135448*(JDut1.second/86400.0 - 2451545.0))
+        R = @SMatrix [ cos(-θ) sin(-θ) 0;
                       -sin(-θ) cos(-θ) 0;
-                      0 0 1]
+                       0 0 1]
 
         # ===== Compute Precession-Nutation matrix (PN)
+        PN = computePrecessionNutation(T_TT, Ax, Ay, As)
 
-        # DO THE ROTATION!!!!!!!
+        # ===== Rotate Vectors
+        T       = SMatrix{3,3}(PN*R*W) # Could improve this with BLAS
+        r       = @SVector [rawData.X[i], rawData.Y[i], rawData.Z[i]]
+        rstd    = @SVector [rawData.Xstd[i], rawData.Ystd[i], rawData.Zstd[i]]
+        data[i, 3:5] .= T*r
+        data[i, 7:9] .= T*rstd
     end
 
     return data
