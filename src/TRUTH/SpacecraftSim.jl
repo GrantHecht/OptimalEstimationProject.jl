@@ -39,7 +39,7 @@ mutable struct SpacecraftSim{DEST}
     end
 end
 
-function GetStateAndControl(ss::SpacecraftSim, t::Real)
+function GetStateAndControl(ss::SpacecraftSim, t::Real; frame = :inertial)
     # Check that t ∈ t0 <= t <= t0 + ts[2]
     if t < ss.t0 || t > ss.t0 + ss.ts[2]*86400
         throw(ArgumentError("t does not fall within tranjectory time span."))
@@ -52,24 +52,30 @@ function GetStateAndControl(ss::SpacecraftSim, t::Real)
     ysyn    = ss.interp(tnd)
 
     # Scale physical states to units of km, km/s, and kg
-    xsyns   = @SVector [ysyn[1]*ss.ps.crp.LU, (ysyn[2] + ss.ps.crp.μ)*ss.ps.crp.LU, ysyn[3]*ss.ps.crp.LU,
+    xsyns   = @SVector [(ysyn[1] + ss.ps.crp.μ)*ss.ps.crp.LU, ysyn[2]*ss.ps.crp.LU, ysyn[3]*ss.ps.crp.LU,
                         ysyn[4]*ss.ps.crp.VU, ysyn[5]*ss.ps.crp.VU, ysyn[6]*ss.ps.crp.VU, ysyn[7]*ss.ps.crp.MU]
 
-    # Create rotation matrix to inertial frame
-    ω       = -1.0  # [rad / n.d. time]
-    θ       = ω*(ss.t0 - t) / ss.ps.crp.TU # [rad]
-    RsI     = @SMatrix [cos(θ) -sin(θ) 0;
-                        sin(θ)  cos(θ) 0;
-                        0       0      1]
-    dRsI    = @SMatrix [-ω*sin(θ) -ω*cos(θ) 0;
-                         ω*cos(θ) -ω*sin(θ) 0;
-                         0         0        0]
+    # Rotate to inertial if desired
+    if frame == :inertial
+        # Create rotation matrix to inertial frame
+        ω       = -1.0              # [rad / n.d. time]
+        ωs      = ω / ss.ps.crp.TU  # [rad / second]
+        θ       = ωs*(ss.t0 + ss.ts[2]*86400 - t)    # [rad]
+        RsI     = @SMatrix [cos(θ) -sin(θ) 0;
+                            sin(θ)  cos(θ) 0;
+                            0       0      1]
+        dRsI    = @SMatrix [-ωs*sin(θ) -ωs*cos(θ) 0;
+                            ωs*cos(θ) -ωs*sin(θ) 0;
+                            0         0        0]
 
-    # Rotate to inertial frame
-    xI      = zeros(7); xI[7] = xsyns[7]
-    @views mul!(xI[1:3], RsI,  xsyns[1:3])
-    @views mul!(xI[4:6], RsI,  xsyns[4:6])
-    @views mul!(xI[4:6], dRsI, xsyns[1:3], 1.0, 1.0)
+        # Rotate to inertial frame
+        xs      = zeros(7); xs[7] = xsyns[7]
+        @views mul!(xs[1:3], RsI,  xsyns[1:3])
+        @views mul!(xs[4:6], RsI,  xsyns[4:6])
+        @views mul!(xs[4:6], dRsI, xsyns[1:3], 1.0, 1.0)
+    else
+        xs = xsyns
+    end
 
     # Compute controls
     us      = zeros(4);
@@ -86,13 +92,19 @@ function GetStateAndControl(ss::SpacecraftSim, t::Real)
 
     # Thrust direction
     ussyn   = @SVector [-ysyn[11] / λv, -ysyn[12] / λv, -ysyn[13] / λv]
-    @views mul!(us[2:4], RsI, ussyn)
+
+    # Rotate to necisary if desired
+    if frame == :inertial
+        @views mul!(us[2:4], RsI, ussyn)
+    else
+        us[2:4] .= ussyn
+    end
     
     # Return state and control
-    return (xI, us)
+    return (xs, us)
 end
 
-function GetStateAndControl(ss::SpacecraftSim, ts::AbstractVector)
+function GetStateAndControl(ss::SpacecraftSim, ts::AbstractVector; frame = :inertial)
     xIs = zeros(length(ts), 7)
     us  = zeros(length(ts), 4)
     for i in 1:length(ts)
@@ -100,7 +112,7 @@ function GetStateAndControl(ss::SpacecraftSim, ts::AbstractVector)
         t = ts[i]
 
         # Get state and control
-        sc = GetStateAndControl(ss, t)
+        sc = GetStateAndControl(ss, t; frame = frame)
 
         # Place in data matricies
         xIs[i,:] .= sc[1]
@@ -108,4 +120,122 @@ function GetStateAndControl(ss::SpacecraftSim, ts::AbstractVector)
     end
 
     return (xIs, us)
+end
+
+function GetControl(ss::SpacecraftSim, t::Real; frame = :inertial)
+    # Check that t ∈ t0 <= t <= t0 + ts[2]
+    if t < ss.t0 || t > ss.t0 + ss.ts[2]*86400
+        throw(ArgumentError("t does not fall within tranjectory time span."))
+    end
+
+    # Compute non-dimentioanl time
+    tnd     = (t - ss.t0) / ss.ps.crp.TU
+
+    # Get state in synodic reference frame 
+    ysyn    = ss.interp(tnd)
+
+    # Compute controls
+    us      = zeros(4);
+    
+    # Scaled exaust velocity
+    cs      = ss.ps.sp.c * ss.ps.crp.TU / (ss.ps.crp.LU * 1000.0)
+
+    # Switching function
+    λv      = norm(view(ysyn, 11:13))
+    S       = IndirectTrajOpt.computeS(ysyn, λv, cs)
+
+    # Throttling factor 
+    us[1]   = S > 0.0 ? 0.0 : 1.0
+
+    # Thrust direction
+    ussyn   = @SVector [-ysyn[11] / λv, -ysyn[12] / λv, -ysyn[13] / λv]
+
+    # Rotate to necisary if desired
+    if frame == :inertial
+        # Create rotation matrix to inertial frame
+        ω       = -1.0              # [rad / n.d. time]
+        ωs      = ω / ss.ps.crp.TU  # [rad / second]
+        θ       = ωs*(ss.t0 + ss.ts[2]*86400 - t)    # [rad]
+        RsI     = @SMatrix [cos(θ) -sin(θ) 0;
+                            sin(θ)  cos(θ) 0;
+                            0       0      1]
+
+        @views mul!(us[2:4], RsI, ussyn)
+    else
+        us[2:4] .= ussyn
+    end
+    
+    # Return state and control
+    return us
+end
+
+function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
+    # Get states and controls
+    (xs,us) = GetStateAndControl(ss, ts; frame = frame)
+
+    # Get target trajectory 
+    xt = generateTargetTrajectory()
+
+    # Plot with MATLAB 
+    mat"""
+        % Bulk Data
+        ts = $ts;
+        xs = $xs;
+        us = $us;
+        xh = $xt;
+
+        % Split into thrust and coast
+        xc = nan(size(xs));
+        xt = nan(size(xs));
+        ut = nan(size(us));
+        lu = us(1,1);
+        for i = 1:length(ts)
+            if us(i,1) == 1.0 || (us(i,1) == 0.0 && lu == 1.0)
+                xt(i,:) = xs(i,:);
+                ut(i,:) = us(i,:);
+            end 
+            if us(i,1) == 0.0 || (us(i,1) == 1.0 && lu == 0.0)
+                xc(i,:) = xs(i,:);
+            end
+            lu = us(i,1);
+        end
+
+        figure()
+        plot3(xt(:,1), xt(:,2), xt(:,3), 'r')
+        hold on
+        plot3(xc(:,1), xc(:,2), xs(:,3), 'b')
+        %quiver3(xt(:,1), xt(:,2), xt(:,3), ut(:,2), ut(:,3), ut(:,4), 'r')
+        plot3(xh(:,1), xh(:,2), xh(:, 3), '--k')
+
+        axis equal 
+        grid on
+    """
+end
+
+function PlotTrajectory(ss::SpacecraftSim; frame = :inertial)
+    # Plot full trajectory
+    ts = range(ss.t0; stop = ss.t0 + ss.ts[2]*86400, length = 10000)
+    PlotTrajectory(ss, ts; frame = frame)
+end
+
+function generateTargetTrajectory()
+    # Parameters 
+    ps = initCR3BPIndirectParams("Low Thrust 10 CR3BP")
+    μ  = ps.crp.μ
+    LU = ps.crp.LU
+    TU = ps.crp.TU
+
+    # Target final conditions
+    xf = @SVector [(1.0 - μ) + 6060.483/LU, 19452.284/LU, -34982.968/LU, 0.082677*(TU/LU), 0.006820*(TU/LU), -0.368434*(TU/LU)]
+
+    # Integrate target trajectory
+    solTarg = integrate(xf, (0.0, 1.6), "Low Thrust 10 CR3BP", CR3BP(), FullSolutionHistoryNoControl())
+    rt = zeros(length(solTarg.t), 3)
+    for i in 1:length(solTarg.t)
+        rt[i,1] = (solTarg.u[i][1] + μ)*LU
+        rt[i,2] = solTarg.u[i][2]*LU
+        rt[i,3] = solTarg.u[i][3]*LU
+    end
+
+    return rt
 end

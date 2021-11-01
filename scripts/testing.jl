@@ -24,3 +24,7 @@ scsim     = OptimalEstimationProject.SpacecraftSim(t0.second)
 
 # Get state and control
 (xs,us)   = OptimalEstimationProject.GetStateAndControl(scsim, t0.second .+ [t for t in 0:10:1000])
+
+# Plotting
+OptimalEstimationProject.PlotTrajectory(scsim; frame = :inertial)
+#OptimalEstimationProject.PlotTrajectory(scsim, range(t0.second + 400; stop = t0.second + 800, length = 100))

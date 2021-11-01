@@ -4,6 +4,7 @@ using DataFrames
 using IndirectTrajOpt
 using StaticArrays
 using LinearAlgebra
+using DifferentialEquations
 using Roots
 using DataInterpolations
 using CSV
@@ -28,6 +29,9 @@ include("GPS/transmissionTimeFunction.jl")
 
 # True Trajectory Dependancies
 include("TRUTH/SpacecraftSim.jl")
+
+# Filters
+include("FILTERS/EKF.jl")
 
 # Precompilation
 precompile(GPSSim, (Int64, Int64, Int64, Int64))

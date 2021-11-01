@@ -19,20 +19,19 @@ function genInterpolants(data)
         end
 
         if i == 1
-            @views x  = CubicSpline(satData[1:count,2], satData[1:count,1])
-            @views y  = CubicSpline(satData[1:count,3], satData[1:count,1])
-            @views z  = CubicSpline(satData[1:count,4], satData[1:count,1])
+            x  = CubicSpline(satData[1:count,2], satData[1:count,1])
+            y  = CubicSpline(satData[1:count,3], satData[1:count,1])
+            z  = CubicSpline(satData[1:count,4], satData[1:count,1])
 
             df = DataFrame(SAT = i, X = [x], Y = [y], Z = [z])
         else
-            @views x  = CubicSpline(satData[1:count,2], satData[1:count,1])
-            @views y  = CubicSpline(satData[1:count,3], satData[1:count,1])
-            @views z  = CubicSpline(satData[1:count,4], satData[1:count,1])
+            x  = CubicSpline(satData[1:count,2], satData[1:count,1])
+            y  = CubicSpline(satData[1:count,3], satData[1:count,1])
+            z  = CubicSpline(satData[1:count,4], satData[1:count,1])
             push!(df, Dict(
                 "SAT" => i, "X" => x, "Y" => y, "Z" => z
             ))
         end
     end
-
     return df
 end
