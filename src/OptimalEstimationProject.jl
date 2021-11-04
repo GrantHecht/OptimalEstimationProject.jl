@@ -27,6 +27,9 @@ include("GPS/genInterpolants.jl")
 include("GPS/GPSSimulator.jl")
 include("GPS/transmissionTimeFunction.jl")
 
+# IMU Simulation
+include("IMU/IMUSim.jl")
+
 # True Trajectory Dependancies
 include("TRUTH/SpacecraftSim.jl")
 
@@ -38,6 +41,10 @@ precompile(GPSSim, (Int64, Int64, Int64, Int64))
 precompile(gpsMeasurement, (GPSSim,Int64,Int64,Int64,Int64))
 
 export GPSSim
+export IMUSim
+export SpacecraftSim
+export EKF
+export runFilter!
 export plotGPS
 
 end

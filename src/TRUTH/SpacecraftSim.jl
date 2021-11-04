@@ -39,14 +39,14 @@ mutable struct SpacecraftSim{DEST}
     end
 end
 
-function GetStateAndControl(ss::SpacecraftSim, t::Real; frame = :inertial)
+function GetStateAndControl(ss::SpacecraftSim, t::Real; frame = :inertial, derivs = false)
     # Check that t ∈ t0 <= t <= t0 + ts[2]
     if t < ss.t0 || t > ss.t0 + ss.ts[2]*86400
         throw(ArgumentError("t does not fall within tranjectory time span."))
     end
 
     # Compute non-dimentioanl time
-    tnd     = (t - ss.t0) / ss.ps.crp.TU
+    tnd     = (t - ss.t0) / (ss.ps.crp.TU)
 
     # Get state in synodic reference frame 
     ysyn    = ss.interp(tnd)
@@ -56,23 +56,50 @@ function GetStateAndControl(ss::SpacecraftSim, t::Real; frame = :inertial)
                         ysyn[4]*ss.ps.crp.VU, ysyn[5]*ss.ps.crp.VU, ysyn[6]*ss.ps.crp.VU, ysyn[7]*ss.ps.crp.MU]
 
     # Rotate to inertial if desired
+    xs = zeros(7)
     if frame == :inertial
         # Create rotation matrix to inertial frame
-        ω       = -1.0              # [rad / n.d. time]
+        ω       = 1.0              # [rad / n.d. time]
         ωs      = ω / ss.ps.crp.TU  # [rad / second]
-        θ       = ωs*(ss.t0 + ss.ts[2]*86400 - t)    # [rad]
-        RsI     = @SMatrix [cos(θ) -sin(θ) 0;
-                            sin(θ)  cos(θ) 0;
-                            0       0      1]
-        dRsI    = @SMatrix [-ωs*sin(θ) -ωs*cos(θ) 0;
-                            ωs*cos(θ) -ωs*sin(θ) 0;
-                            0         0        0]
+        θ       = -ωs*(ss.t0 + ss.ts[2]*86400 - t)    # [rad]
 
-        # Rotate to inertial frame
-        xs      = zeros(7); xs[7] = xsyns[7]
-        @views mul!(xs[1:3], RsI,  xsyns[1:3])
-        @views mul!(xs[4:6], RsI,  xsyns[4:6])
-        @views mul!(xs[4:6], dRsI, xsyns[1:3], 1.0, 1.0)
+        if derivs == false
+            RsI     = @SMatrix [cos(θ) -sin(θ) 0;
+                                sin(θ)  cos(θ) 0;
+                                0       0      1]
+            dRsI    = @SMatrix [-ωs*sin(θ) -ωs*cos(θ) 0;
+                                ωs*cos(θ) -ωs*sin(θ) 0;
+                                0         0        0]
+
+            # Rotate to inertial frame
+            xs[7] = xsyns[7]
+            @views mul!(xs[1:3], RsI,  xsyns[1:3])
+            @views mul!(xs[4:6], RsI,  xsyns[4:6])
+            @views mul!(xs[4:6], dRsI, xsyns[1:3], 1.0, 1.0)
+        else
+            AU      = ss.ps.crp.VU / ss.ps.crp.TU
+            dysyn   = ss.interp(tnd, Val{1})
+            dxsyns  = @SVector [dysyn[1]*ss.ps.crp.VU, dysyn[2]*ss.ps.crp.VU, dysyn[3]*ss.ps.crp.VU,
+                                dysyn[4]*AU, dysyn[5]*AU, dysyn[6]*AU, dysyn[7]*ss.ps.crp.MU / ss.ps.crp.TU]
+
+            RsI     = @SMatrix [cos(θ) -sin(θ) 0;
+                                sin(θ)  cos(θ) 0;
+                                0       0      1]
+            dRsI    = @SMatrix [-ωs*sin(θ) -ωs*cos(θ) 0;
+                                ωs*cos(θ) -ωs*sin(θ) 0;
+                                0         0        0]
+            ddRsI   = @SMatrix [-ωs^2*cos(θ)  ωs^2*sin(θ) 0;
+                                -ωs^2*sin(θ) -ωs^2*cos(θ) 0;
+                                0            0            0]
+
+            # Rotate to inertial frame
+            xs[7] = dxsyns[7]
+            @views mul!(xs[1:3], RsI,   dxsyns[1:3])
+            @views mul!(xs[1:3], dRsI,  xsyns[1:3], 1.0, 1.0)
+            @views mul!(xs[4:6], RsI,   dxsyns[4:6])
+            @views mul!(xs[4:6], dRsI,  dxsyns[1:3], 2.0, 1.0)
+            @views mul!(xs[4:6], ddRsI, xsyns[1:3], 1.0, 1.0)
+        end
     else
         xs = xsyns
     end
@@ -169,12 +196,72 @@ function GetControl(ss::SpacecraftSim, t::Real; frame = :inertial)
     return us
 end
 
+function GetControlAndLunaPos(ss::SpacecraftSim, t::Real; frame = :inertial)
+    # Check that t ∈ t0 <= t <= t0 + ts[2]
+    if t < ss.t0 || t > ss.t0 + ss.ts[2]*86400
+        throw(ArgumentError("t does not fall within tranjectory time span."))
+    end
+
+    # Compute non-dimentioanl time
+    tnd     = (t - ss.t0) / ss.ps.crp.TU
+
+    # Get state in synodic reference frame 
+    ysyn    = ss.interp(tnd)
+
+    # Compute controls
+    us      = zeros(4);
+    
+    # Scaled exaust velocity
+    cs      = ss.ps.sp.c * ss.ps.crp.TU / (ss.ps.crp.LU * 1000.0)
+
+    # Switching function
+    λv      = norm(view(ysyn, 11:13))
+    S       = IndirectTrajOpt.computeS(ysyn, λv, cs)
+
+    # Throttling factor 
+    us[1]   = S > 0.0 ? 0.0 : 1.0
+
+    # Thrust direction
+    ussyn   = @SVector [-ysyn[11] / λv, -ysyn[12] / λv, -ysyn[13] / λv]
+
+    # Luna position
+    rLunaSyn    = @SVector [ss.ps.crp.LU, 0.0, 0.0]
+    rLuna       = zeros(3)
+
+    # Rotate to necisary if desired
+    if frame == :inertial
+        # Create rotation matrix to inertial frame
+        ω       = -1.0              # [rad / n.d. time]
+        ωs      = ω / ss.ps.crp.TU  # [rad / second]
+        θ       = ωs*(ss.t0 + ss.ts[2]*86400 - t)    # [rad]
+        RsI     = @SMatrix [cos(θ) -sin(θ) 0;
+                            sin(θ)  cos(θ) 0;
+                            0       0      1]
+
+        @views mul!(us[2:4], RsI, ussyn)
+        mul!(rLuna, RsI, rLunaSyn)
+    else
+        us[2:4] .= ussyn
+        rLuna .= rLunaSyn
+    end
+    
+    # Return state and control
+    return (us, rLuna)
+end
+
 function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
     # Get states and controls
     (xs,us) = GetStateAndControl(ss, ts; frame = frame)
 
     # Get target trajectory 
     xt = generateTargetTrajectory()
+
+    # Frame String
+    if frame == :inertial 
+        fs = "i"
+    else
+        fs = "s"
+    end
 
     # Plot with MATLAB 
     mat"""
@@ -200,15 +287,66 @@ function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
             lu = us(i,1);
         end
 
-        figure()
-        plot3(xt(:,1), xt(:,2), xt(:,3), 'r')
-        hold on
-        plot3(xc(:,1), xc(:,2), xs(:,3), 'b')
-        %quiver3(xt(:,1), xt(:,2), xt(:,3), ut(:,2), ut(:,3), ut(:,4), 'r')
-        plot3(xh(:,1), xh(:,2), xh(:, 3), '--k')
+        if $fs == "i"
+            figure()
+            subplot(2,1,1)
+            plot(xt(:,1), xt(:,2), 'r')
+            hold on
+            plot(xc(:,1), xc(:,2), 'b')
+            plot(xh(:,1), xh(:,2), '--k')
+            ylabel("Y, km", "Interpreter", "latex")
 
-        axis equal 
-        grid on
+            % Plot Earth
+            scatter(0.0, 0.0, "xk")
+        
+            % Plot Moon
+            scatter($(ss.ps.crp.LU), 0.0, "xk")
+
+            axis equal 
+            grid on
+
+            subplot(2,1,2)
+            plot(xt(:,1), xt(:,3), 'r')
+            hold on
+            plot(xc(:,1), xc(:,3), 'b')
+            plot(xh(:,1), xh(:,3), '--k')
+            ylabel("Z, km", "Interpreter", "latex")
+
+            % Plot Earth
+            scatter(0.0, 0.0, "xk");
+        
+            % Plot Moon
+            scatter($(ss.ps.crp.LU), 0.0, "xk")
+
+            axis equal 
+            grid on
+
+            %leg1 = legend("Thrusting Arc", "Coasting Arc", "Target NRHO");
+            xlabel("X, km", "Interpreter", "latex")
+        else
+            figure()
+            plot(xt(:,1), xt(:,2), 'r')
+            hold on
+            plot(xc(:,1), xc(:,2), 'b')
+            plot(xh(:,1), xh(:,2), '--k')
+            ylabel("Y, km", "Interpreter", "latex")
+            xlabel("X, km", "Interpreter", "latex")
+
+            % Plot Earth
+            scatter(0.0, 0.0, "xk");
+        
+            % Plot Moon
+            scatter($(ss.ps.crp.LU), 0.0, "xk")
+
+            axis equal 
+            grid on
+        end
+
+        set(gca, "fontname", "Times New Roman", "fontsize", 10)
+        %set(leg1, "fontname", "Times New Roman", "fontsize", 10, "Interpreter", "latex")
+        set(gcf, "PaperUnits", "inches", "PaperPosition", [0.25, 0.25, 5.0, 4.0])
+        set(gcf, "PaperPositionMode", "Manual")
+        print("./figures/" + $fs + "Traj.pdf", "-dpdf", "-r600")
     """
 end
 

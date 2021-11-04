@@ -50,9 +50,9 @@ function gpsMeasurement(gps::GPSSim, r::AbstractVector, t; type = :true)
     tts = zeros(32)
     for i in 1:32
         try
-            #func(tt) = transmissionTimeFunction(tt, t, r, Xs[i], Ys[i], Zs[i])
-            #tts[i] = find_zero(func, t)
-            tts[i] = transmissionTimeFunction(t, r, Xs[i], Ys[i], Zs[i])
+            func(tt) = transmissionTimeFunction(tt, t, r, Xs[i], Ys[i], Zs[i])
+            tts[i] = find_zero(func, t)
+            #tts[i] = transmissionTimeFunction(t, r, Xs[i], Ys[i], Zs[i])
         catch
             tts[i] = 0.0
         end
@@ -78,8 +78,6 @@ function gpsMeasurement(gps::GPSSim, r::AbstractVector, t; type = :true)
             if d < 0.0
                 visable[i] = true
             end
-        else
-            visable[i] = false
         end
     end
 
@@ -121,9 +119,12 @@ function gpsMeasurement(gps::GPSSim, r::AbstractVector, t; type = :true)
                     #Δtσ2    = gps.data[j,10]
                     #Δttrue  = (Δt1 + (t - t1)*(Δt2 - Δt1)/(t2 - t1)) * 1e-6
                     #Δtσ     = Δtσ1 + (t - t1)*(Δtσ2 - Δtσ1)/(t2 - t1) * 1e-12
-                    Δtm  = Δt1*1e-6
+                    Δtm     = Δt1*1e-6
                     Δtσ     = Δtσ1*1e-12
                     Δtsat   = Δtm + Δtσ*randn()
+                    if isnan(Δtsat) # Currently data in GPSSim.data is getting set to NaN so this is a workaround for now.
+                        Δtsat = 0.0
+                    end
                 end
             end
 
@@ -226,8 +227,9 @@ function plotGPS(gps::GPSSim, sats::AbstractVector)
     figure()
     hold on
     for i = 1:length(sats)
-        sat   = sats(i);
-        count = 0;
+        satData = satData .* NaN;
+        sat     = sats(i);
+        count   = 0;
         for j = 1:size(data,1)
             if data(j,2) == sat
                 count = count + 1;
@@ -236,7 +238,24 @@ function plotGPS(gps::GPSSim, sats::AbstractVector)
         end
         plot3(satData(:,1),satData(:,2),satData(:,3))
     end
+
+    % Plot Earth
+    [A,B,C] = ellipsoid(0.0, 0.0, 0.0, 6378, 6378, 6378);
+    surf(A,B,-C, imread("./figures/WM.jpg"), "FaceColor", "texturemap", "EdgeColor", "none")
+
     grid on
     axis equal
+    view(3)
+
+    xlabel("X, km", "Interpreter", "latex")
+    ylabel("Y, km", "Interpreter", "latex")
+    zlabel("Z, km", "Interpreter", "latex")
+
+    set(gca, "fontname", "Times New Roman", "fontsize", 10)
+    set(gcf, "PaperUnits", "inches", "PaperPosition", [0.25, 0.25, 5.0, 4.0])
+    set(gcf, "PaperPositionMode", "Manual")
+    print("./figures/GPSConst.pdf", "-dpdf", "-r300")
     """
 end
+
+plotGPS(gps::GPSSim) = plotGPS(gps, 1:32)

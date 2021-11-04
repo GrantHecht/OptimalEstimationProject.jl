@@ -2,6 +2,8 @@
 mutable struct EKF
     # Measurement times
     ts::Vector{Float64}
+    imuΔt::Float64
+    gpsΔt::Float64
 
     # Measurement residuals
     rs::Matrix{Float64}
@@ -21,13 +23,18 @@ mutable struct EKF
     PH::Matrix{Float64}
     KH::Matrix{Float64}
     F::Matrix{Float64}
-    R::Diagonal{Float64, Vector{Float64}}
     Q::Diagonal{Float64, Vector{Float64}}
     y::Vector{Float64}
+    dy::Vector{Float64}
 
     # Simulators
     gpsSim::GPSSim
+    imuSim::IMUSim
     scSim::SpacecraftSim
+
+    # Measurement covariance terms
+    σ2GPS::Float64
+    σ2Acc::Float64
 
     # Steps to save per propagation
     stp::Int64
@@ -40,31 +47,38 @@ mutable struct EKF
 
     # Finished flag
     finished::Bool
+
+    # Luna perturbation flag
+    lunaPerts::Bool
 end
 
-function EKF(xhat0, P0, R, Q, ts, gpsSim, scSim; steps2save = 20)
+function EKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim; lunaPerts = false, steps2save = 5)
     # Instantiate preallocated matriciesAdd
     ixp     = 1
-    rs      = zeros(length(ts), 32)
+    rs      = zeros(length(ts), 32 + 3)
     txp     = zeros((steps2save + 1)*length(ts) + 1); txp[1] = scSim.t0
     xhats   = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :] .= xhat0
     es      = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :]
     Ps      = zeros((steps2save + 1)*length(ts) + 1, 7); Ps[1, :] .= diag(P0)
     P⁻      = zeros(7,7)
     P⁺      = deepcopy(P0)
-    H       = zeros(32, 7)
-    HPH     = zeros(32, 32)
-    PH      = zeros(7, 32)
+    H       = zeros(32 + 3, 7)
+    HPH     = zeros(32 + 3, 32 + 3)
+    PH      = zeros(7, 32 + 3)
     KH      = zeros(7,7)
     F       = zeros(7,7)
     y       = zeros(7 + 49)
+    dy      = deepcopy(y)
+
+    # Compute IMU Δt from ts vector
+    imuΔt   = ts[2] - ts[1]
 
     # Compute initial estimates error
     (ytrue, u) = GetStateAndControl(scSim, scSim.t0)
     @views es[1,:] .= xhat0 .- ytrue[1:7]
 
     # Instantiate EKF
-    EKF(ts,rs,txp,ixp,xhats,es,Ps,P⁺,P⁻,H,HPH,PH,KH,F,R,Q,y,gpsSim,scSim,steps2save,0,true,false)
+    EKF(ts,imuΔt,gpsΔt,rs,txp,ixp,xhats,es,Ps,P⁺,P⁻,H,HPH,PH,KH,F,Q,y,dy,gpsSim,imuSim,scSim,σ2GPS,σ2Acc,steps2save,0,true,false,lunaPerts)
 end
 
 function propagate!(ekf::EKF)
@@ -99,10 +113,14 @@ function propagate!(ekf::EKF)
     end
 
     # Create ODE Problem 
-    prob = ODEProblem(ekfNoLunarPertEOM!, ekf.y, (t0, tf), ekf)
+    if ekf.lunaPerts == false
+        prob = ODEProblem(ekfNoLunarPertEOM!, ekf.y, (t0, tf), ekf)
+    else
+        prob = ODEProblem(ekfWithLunarPertEOM!, ekf.y, (t0, tf), ekf)
+    end
 
     # Solve ODE 
-    sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8, saveat=saveat)
+    sol = solve(prob, Vern7(), reltol=1e-10, abstol=1e-10, saveat=saveat)
 
     # Set P⁻
     ekf.P⁻ .= reshape(sol.u[end][8:end], (7, 7))
@@ -121,7 +139,7 @@ function propagate!(ekf::EKF)
         @views ekf.xhats[i,:] .= sol.u[step][1:7]
 
         # Error
-        (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.scSim.t0)
+        (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.txp[i])
         @views ekf.es[i,:] .= ekf.xhats[i,:] .- ytrue[1:7]
 
         # Covariance
@@ -132,7 +150,7 @@ function propagate!(ekf::EKF)
     return nothing
 end
 
-function update!(ekf::EKF)
+function updateGPS!(ekf::EKF)
     if ekf.updated == true
         throw(ErrorException("Cannot update before propagating."))
     else
@@ -148,71 +166,245 @@ function update!(ekf::EKF)
     # Get true state 
     (ytrue, u) = GetStateAndControl(ekf.scSim, t)
 
-    # Generate measurements
-    @views meas = gpsMeasurement(ekf.gpsSim, ytrue[1:3], t)
+    # Generate gps measurements
+    @views measGPS = gpsMeasurement(ekf.gpsSim, ytrue[1:3], t)
 
     # Get satelite ids
-    @views sats = meas[2:2:end]
+    @views sats = measGPS[2:2:end]
     numSats = length(sats)
 
-    # Get expected measurements
-    @views (expMeas, ps) = gpsMeasurement(ekf.gpsSim, xhat[1:3], sats, t; type = :expected)
+    # Get expected gps measurements
+    @views (expMeasGPS, ps) = gpsMeasurement(ekf.gpsSim, xhat[1:3], sats, t; type = :expected)
 
-    # Compute residual
-    @views ekf.rs[ekf.k, 1:numSats] .= meas[3:2:end] .- expMeas[3:2:end]
-
-    # Compute measurement Jacobian
-    ekf.H .*= 0.0
+    # Compute residuals and measurement partials
+    numRejected = 0
+    rejectTol   = 1e3
     for i in 1:numSats
-        @views ekf.H[i, 1:3] .= ps[i,1:3]
-        @views ekf.H[i, 1:3] ./= norm(ps[i,1:3])
-    end
+        r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
+        if r < rejectTol
+            # Compute residual while catching bad measurements
+            @views ekf.rs[ekf.k, i - numRejected] = r
 
+            # Compute measurement Jacobian
+            ekf.H .*= 0.0
+            @views ekf.H[i - numRejected, 1:3] .= -ps[i,1:3]
+            @views ekf.H[i - numRejected, 1:3] ./= norm(ps[i,1:3])
+        else
+            numRejected += 1
+        end
+    end
+    numSats -= numRejected
+    
     # Compute gain
-    @views mul!(ekf.PH[:,1:numSats], ekf.P⁻, transpose(ekf.H[1:numSats, :]))
-    @views mul!(ekf.HPH[1:numSats,1:numSats], ekf.H[1:numSats, :], ekf.PH[:,1:numSats])
-    display(ekf.HPH)
-    for i in 1:numSats; ekf.HPH[i,i] += ekf.R[i,i]; end
-    @views HPHpRFact = factorize(ekf.HPH[1:numSats,1:numSats])
-    @views rdiv!(ekf.PH[:,1:numSats], HPHpRFact) # Stores K in PH matrix
-    display(ekf.PH)
+    numMeas = numSats
+    @views mul!(ekf.PH[:,1:numMeas], ekf.P⁻, transpose(ekf.H[1:numMeas, :]))
+    @views mul!(ekf.HPH[1:numMeas,1:numMeas], ekf.H[1:numMeas, :], ekf.PH[:,1:numMeas])
+    for i in 1:numSats; ekf.HPH[i,i] += ekf.σ2GPS; end
+    @views HPHpRFact = factorize(ekf.HPH[1:numMeas,1:numMeas])
+    @views rdiv!(ekf.PH[:,1:numMeas], HPHpRFact) # Stores K in PH matrix
 
     # Compute state update
     ekf.ixp += 1
-    @views mul!(ekf.xhats[ekf.ixp, :], ekf.PH[:,1:numSats], ekf.rs[ekf.k, 1:numSats])
-    display(ekf.xhats[ekf.ixp,:])
-    display(xhat)
-    ekf.xhats[ekf.ixp, :] .+= xhat
+    @views mul!(ekf.xhats[ekf.ixp, :], ekf.PH[:,1:numMeas], ekf.rs[ekf.k, 1:numMeas])
+    ekf.xhats[ekf.ixp, :] .+= ekf.xhats[ekf.ixp - 1, :]
 
     # Set time in storage vector
     ekf.txp[ekf.ixp] = t
 
     # Compute error
-    (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.scSim.t0)
+    (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.txp[ekf.ixp])
     @views ekf.es[ekf.ixp, :] .= ekf.xhats[ekf.ixp, :] .- ytrue[1:7]
 
     # Compute covariance update
-    @views mul!(ekf.KH, ekf.PH[:,1:numSats], ekf.H[1:numSats,:], -1.0, 0.0)
+    @views mul!(ekf.KH, ekf.PH[:,1:numMeas], ekf.H[1:numMeas,:], -1.0, 0.0)
     for i in 1:7; ekf.KH[i,i] += 1.0; end
     mul!(ekf.P⁺, ekf.KH, ekf.P⁻)
+
     ekf.Ps[ekf.ixp, :] .= diag(ekf.P⁺)
 
     return nothing
 end
 
-function runFilter(ekf::EKF)
+function updateIMU!(ekf::EKF)
+    if ekf.updated == true
+        throw(ErrorException("Cannot update before propagating."))
+    else
+        ekf.updated = true
+    end
+
+    # Get current time
+    t = ekf.ts[ekf.k]
+
+    # Get state estimate
+    @views xhat = ekf.xhats[ekf.ixp, :]
+
+    # Generate accelerometer measurements
+    (dy, _us) = GetStateAndControl(ekf.scSim, t; derivs = true)
+    @views measAcc = ComputeMeasurement(ekf.imuSim, dy[4:6])
+
+    # Compute expected accelerometer measurement
+    @views ekf.y[1:7] .= xhat
+    ekf.y[8:end] .= 0.0
+    for i in 1:7; ekf.y[7 + 7*(i - 1) + i] = 1.0; end
+    if ekf.lunaPerts == false
+        ekfNoLunarPertEOM!(ekf.dy, ekf.y, ekf, t)
+    else
+        ekfWithLunarPertEOM!(ekf.dy, ekf.y, ekf, t)
+    end   
+    @views expMeasAcc = ComputeMeasurement(ekf.imuSim, ekf.dy[4:6]; type = :expected)
+
+    # Compute accelerometer residuals and partials
+    ekf.rs[ekf.k, 1:3]   .= measAcc .- expMeasAcc
+    @views ekf.H[1:3, 1:3] .= ekf.F[4:6, 1:3]
+    @views ekf.H[1:3, 7] .= ekf.F[4:6, 7]
+
+    # Compute gain
+    numMeas = 3
+    @views mul!(ekf.PH[:,1:numMeas], ekf.P⁻, transpose(ekf.H[1:numMeas, :]))
+    @views mul!(ekf.HPH[1:numMeas,1:numMeas], ekf.H[1:numMeas, :], ekf.PH[:,1:numMeas])
+    for i in 1:3; ekf.HPH[i,i] += ekf.σ2Acc; end
+    @views HPHpRFact = factorize(ekf.HPH[1:numMeas,1:numMeas])
+    @views rdiv!(ekf.PH[:,1:numMeas], HPHpRFact) # Stores K in PH matrix
+
+    # Compute state update
+    ekf.ixp += 1
+    @views mul!(ekf.xhats[ekf.ixp, :], ekf.PH[:,1:numMeas], ekf.rs[ekf.k, 1:numMeas])
+    ekf.xhats[ekf.ixp, :] .+= ekf.xhats[ekf.ixp - 1, :]
+
+    # Set time in storage vector
+    ekf.txp[ekf.ixp] = t
+
+    # Compute error
+    (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.txp[ekf.ixp])
+    @views ekf.es[ekf.ixp, :] .= ekf.xhats[ekf.ixp, :] .- ytrue[1:7]
+
+    # Compute covariance update
+    @views mul!(ekf.KH, ekf.PH[:,1:numMeas], ekf.H[1:numMeas,:], -1.0, 0.0)
+    for i in 1:7; ekf.KH[i,i] += 1.0; end
+    mul!(ekf.P⁺, ekf.KH, ekf.P⁻)
+
+    ekf.Ps[ekf.ixp, :] .= diag(ekf.P⁺)
+
+    return nothing
+end
+
+
+function updateGPSIMU!(ekf::EKF)
+    if ekf.updated == true
+        throw(ErrorException("Cannot update before propagating."))
+    else
+        ekf.updated = true
+    end
+
+    # Get current time
+    t = ekf.ts[ekf.k]
+
+    # Get state estimate
+    @views xhat = ekf.xhats[ekf.ixp, :]
+
+    # Get true state 
+    (ytrue, u) = GetStateAndControl(ekf.scSim, t)
+
+    # Generate gps measurements
+    @views measGPS = gpsMeasurement(ekf.gpsSim, ytrue[1:3], t)
+
+    # Get satelite ids
+    @views sats = measGPS[2:2:end]
+    numSats = length(sats)
+
+    # Get expected gps measurements
+    @views (expMeasGPS, ps) = gpsMeasurement(ekf.gpsSim, xhat[1:3], sats, t; type = :expected)
+
+    # Compute residuals and measurement partials
+    numRejected = 0
+    rejectTol   = 1e3
+    for i in 1:numSats
+        r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
+        if r < rejectTol
+            # Compute residual while catching bad measurements
+            @views ekf.rs[ekf.k, i - numRejected] = r
+
+            # Compute measurement Jacobian
+            ekf.H .*= 0.0
+            @views ekf.H[i - numRejected, 1:3] .= -ps[i,1:3]
+            @views ekf.H[i - numRejected, 1:3] ./= norm(ps[i,1:3])
+        else
+            numRejected += 1
+        end
+    end
+    numSats -= numRejected
+
+    # Generate accelerometer measurements
+    (dy, _us) = GetStateAndControl(ekf.scSim, t; derivs = true)
+    @views measAcc = ComputeMeasurement(ekf.imuSim, dy[4:6])
+
+    # Compute expected accelerometer measurement
+    @views ekf.y[1:7] .= xhat
+    ekf.y[8:end] .= 0.0
+    for i in 1:7; ekf.y[7 + 7*(i - 1) + i] = 1.0; end
+    if ekf.lunaPerts == false
+        ekfNoLunarPertEOM!(ekf.dy, ekf.y, ekf, t)
+    else
+        ekfWithLunarPertEOM!(ekf.dy, ekf.y, ekf, t)
+    end   
+    @views expMeasAcc = ComputeMeasurement(ekf.imuSim, ekf.dy[4:6]; type = :expected)
+
+    # Compute accelerometer residuals and partials
+    ekf.rs[ekf.k, numSats + 1:numSats + 3]   .= measAcc .- expMeasAcc
+    @views ekf.H[numSats + 1:numSats + 3, 1:3] .= ekf.F[4:6, 1:3]
+    @views ekf.H[numSats + 1:numSats + 3, 7] .= ekf.F[4:6, 7]
+
+    # Compute gain
+    numMeas = numSats + 3
+    @views mul!(ekf.PH[:,1:numMeas], ekf.P⁻, transpose(ekf.H[1:numMeas, :]))
+    @views mul!(ekf.HPH[1:numMeas,1:numMeas], ekf.H[1:numMeas, :], ekf.PH[:,1:numMeas])
+    for i in 1:numSats; ekf.HPH[i,i] += ekf.σ2GPS; end
+    for i in numSats + 1:numMeas; ekf.HPH[i,i] += ekf.σ2Acc; end
+    @views HPHpRFact = factorize(ekf.HPH[1:numMeas,1:numMeas])
+    @views rdiv!(ekf.PH[:,1:numMeas], HPHpRFact) # Stores K in PH matrix
+
+    # Compute state update
+    ekf.ixp += 1
+    @views mul!(ekf.xhats[ekf.ixp, :], ekf.PH[:,1:numMeas], ekf.rs[ekf.k, 1:numMeas])
+    ekf.xhats[ekf.ixp, :] .+= ekf.xhats[ekf.ixp - 1, :]
+
+    # Set time in storage vector
+    ekf.txp[ekf.ixp] = t
+
+    # Compute error
+    (ytrue, u) = GetStateAndControl(ekf.scSim, ekf.txp[ekf.ixp])
+    @views ekf.es[ekf.ixp, :] .= ekf.xhats[ekf.ixp, :] .- ytrue[1:7]
+
+    # Compute covariance update
+    @views mul!(ekf.KH, ekf.PH[:,1:numMeas], ekf.H[1:numMeas,:], -1.0, 0.0)
+    for i in 1:7; ekf.KH[i,i] += 1.0; end
+    mul!(ekf.P⁺, ekf.KH, ekf.P⁻)
+
+    ekf.Ps[ekf.ixp, :] .= diag(ekf.P⁺)
+
+    return nothing
+end
+
+function runFilter!(ekf::EKF)
     for i in 1:length(ekf.ts)
         propagate!(ekf)
-        update!(ekf)
+        if i*ekf.imuΔt % ekf.gpsΔt == 0
+            updateGPSIMU!(ekf)
+        else
+            updateIMU!(ekf)
+        end
     end
 end
 
 function ekfNoLunarPertEOM!(dy, y, ekf::EKF, t)
+    # Zero F 
+    ekf.F .= 0.0
+
     # Earth gravitational parameter
     μ = 3.986004418e5 # [km^3/s^2]
 
     # Thrust magnitued
-    T = 10 # [N]
+    T = 10e-3 # [kN]
 
     # Get control
     u = GetControl(ekf.scSim, t)
@@ -245,3 +437,65 @@ function ekfNoLunarPertEOM!(dy, y, ekf::EKF, t)
     mul!(dP, P, transpose(ekf.F), 1.0, 1.0)
     dP .+= ekf.Q
 end
+
+function ekfWithLunarPertEOM!(dy, y, ekf::EKF, t)
+    # Zero F 
+    ekf.F .= 0.0
+
+    # Earth gravitational parameter
+    μ = 5.9742e24*6.673e-20
+
+    # Luna gravitational parameter
+    μl = 7.3483e22*6.673e-20
+
+    # Thrust magnitued
+    T = 10e-3 # [kN]
+
+    # Get control
+    (u, rLuna) = GetControlAndLunaPos(ekf.scSim, t)
+
+    # Luna gravitational perturbation
+    rls         = @SVector [rLuna[1] - y[1], rLuna[2] - y[2], rLuna[3] - y[3]]
+    μldRls3     = μl / (norm(rls)^3)
+    μldRluna3   = μl / (norm(rLuna)^3)
+    al          = @SVector [rls[1]*μldRls3 - rLuna[1]*μldRluna3,
+                            rls[2]*μldRls3 - rLuna[2]*μldRluna3,
+                            rls[3]*μldRls3 - rLuna[3]*μldRluna3]
+    # States
+    @views r        = norm(y[1:3])
+    @views dy[1:3] .= y[4:6]
+    @views dy[4:6] .= -(μ/r^3).*y[1:3] .+ al .+ (T*u[1] / y[7]).*u[2:4]
+    dy[7]           = -u[1]*T / ekf.scSim.ps.sp.c
+
+    # Dynamics Jacobian
+    # dr/dv
+    ekf.F[1,4] = 1.0
+    ekf.F[2,5] = 1.0
+    ekf.F[3,6] = 1.0
+
+    # dv/dr keplarian
+    @views mul!(ekf.F[4:6, 1:3], y[1:3], transpose(y[1:3]))
+    @views ekf.F[4:6, 1:3] .*= (3.0 / r^2)
+    for i in 1:3; ekf.F[3 + i, i] -= 1.0; end
+    @views ekf.F[4:6, 1:3] .*= (μ/r^3)
+
+    # dv/dr luna perturbation (stealing memory from ekf.H)
+    @views mul!(ekf.H[1:3, 1:3], rls, transpose(rls))
+    @views ekf.H[1:3, 1:3] .*= (3.0 / norm(rls)^2)
+    for i in 1:3; ekf.H[i,i] -= 1.0; end
+    @views ekf.H[1:3, 1:3] .*= (μl / norm(rls)^3)
+
+    # Combine dv/dr partials
+    @views ekf.F[4:6, 1:3] .+= ekf.H[1:3, 1:3]
+
+    # dv/dm
+    @views ekf.F[4:6, 7] .= -(u[1]*T / y[7]^2) .* u[2:4]
+
+    # Covariance Dynamics
+    @views P   = reshape(y[8:end], (7, 7))
+    @views dP  = reshape(dy[8:end], (7, 7))
+    mul!(dP, ekf.F, P)
+    mul!(dP, P, transpose(ekf.F), 1.0, 1.0)
+    dP .+= ekf.Q
+end
+
