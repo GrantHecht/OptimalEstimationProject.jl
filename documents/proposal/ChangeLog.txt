@@ -1,0 +1,11 @@
+27 Oct 2008 - The AAS.cls style file was updated to fix an issue where errors occurred if authors were listed across 2 lines in "submit" mode.
+
+06 Mar 2009 - The AAS.cls style file was updated so the user can add or remove the keyword "Preprint" to the top under the document declaration.
+
+13 Oct 2009 - The AAS.cls style was updated to correctly add a period (".") after the figure label caption whenever the caption extends across multiple lines.  Duplicated files were removed from the Figures folder.
+
+19 Feb 2010 - The AAS.cls style was updated to have consistent spacing to the page number and title in the TeX template.
+
+1 Mar 2010 - The AAS.cls style was updated to a spacing fix an issue with very long titles and author lists.
+
+24 Mar 2011 - The AAStemplate.tex file is updated to version 2.0.6 to force the paper format be US Letter size, and not A4. The paper number was changed to generic XX-XXX and an issue was fixed with subsubsection titles.  A non-working URL footnote was replaced.

@@ -1,0 +1,32 @@
+\begin{thebibliography}{1}
+
+\bibitem{Hecht_2021}
+G.~R. Hecht and E.~M. Botta, ``Co-State Initialization With Particle Swarm
+  Optimization For Low-Thrust Minimum-Fuel Trajectory Optimization,''  {\em
+  AAS/AIAA Astrodynamics Specialist Conference}, 2021.
+
+\bibitem{Tapley_2004}
+B.~D. Tapely, B.~E. Schutz, and G.~H. Born, {\em {S}tatistical {O}rbit
+  {D}etermination}.
+\newblock Elsevier Inc., 2004.
+
+\bibitem{Craft_2020}
+K.~J. Craft, G.~R. Hecht, and H.~J. Pernicka, ``Initial Development and
+  Verification of a Precise Orbit Determiantion Filter for the APEX CubeSat
+  Mission,''  {\em 34th Annual AIAA/USU Conference on Small Satellites}, Logan,
+  UT, 2020.
+
+\bibitem{IGSproducts}
+G.~Johnston, A.~Riddel, and G.~Hausler, {\em {T}he {I}nternational {GNSS}
+  {S}ervice. {I}n {T}eunissen, {P}eter {J.G.}, and {M}ontenbruck, {O.}
+  ({E}ds.), {S}pringer {H}andbook of {G}lobal {N}avigation {S}atellite
+  {S}ystems}.
+\newblock Cham, Switzerland: Springer International Publishing, pp. 967-982,
+  2017.
+
+\bibitem{Vallado_2013}
+D.~A. Vallado and W.~D. McClain, {\em {F}undamentals of {A}strodynamics and
+  {A}pplications}.
+\newblock Microcosm Press, Hawthorne, CA, 2013.
+
+\end{thebibliography}

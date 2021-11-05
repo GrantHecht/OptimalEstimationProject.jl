@@ -1,0 +1,53 @@
+This is BibTeX, Version 0.99d (TeX Live 2019/Debian)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: proposal.aux
+The style file: AAS_publication.bst
+Database file #1: references.bib
+Name 1 in "Byron D. Tapely, and Bob E. Schutz, and George H. Born" has a comma at the end for entry Tapley_2004
+while executing---line 2009 of file AAS_publication.bst
+Name 2 in "Byron D. Tapely, and Bob E. Schutz, and George H. Born" has a comma at the end for entry Tapley_2004
+while executing---line 2009 of file AAS_publication.bst
+Name 1 in "David A. Vallado, and Wayne D. McClain" has a comma at the end for entry Vallado_2013
+while executing---line 2009 of file AAS_publication.bst
+You've used 5 entries,
+            1928 wiz_defined-function locations,
+            517 strings with 4589 characters,
+and the built_in function-call counts, 914 in all, are:
+= -- 70
+> -- 49
+< -- 0
++ -- 18
+- -- 13
+* -- 56
+:= -- 143
+add.period$ -- 8
+call.type$ -- 5
+change.case$ -- 0
+chr.to.int$ -- 0
+cite$ -- 5
+duplicate$ -- 53
+empty$ -- 114
+format.name$ -- 13
+if$ -- 223
+int.to.chr$ -- 0
+int.to.str$ -- 5
+missing$ -- 8
+newline$ -- 21
+num.names$ -- 5
+pop$ -- 33
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 9
+stack$ -- 0
+substring$ -- 0
+swap$ -- 5
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 0
+while$ -- 5
+width$ -- 6
+write$ -- 46
+(There were 3 error messages)
