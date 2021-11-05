@@ -1,7 +1,7 @@
-\BOOKMARK [1][-]{section*.2}{Introduction}{}% 1
-\BOOKMARK [1][-]{section*.3}{Technical Plan}{}% 2
-\BOOKMARK [2][-]{section*.4}{True Trajectory Generation}{section*.3}% 3
-\BOOKMARK [2][-]{section*.5}{Measurement Modeling}{section*.3}% 4
-\BOOKMARK [3][-]{section*.6}{GPS Pseudoranges:}{section*.5}% 5
-\BOOKMARK [3][-]{section*.7}{Inertial Measurement Unit}{section*.5}% 6
-\BOOKMARK [1][-]{section*.8}{Preliminary and Expected Results}{}% 7
+\BOOKMARK [1][-]{section*.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section*.2}{Technical Plan}{}% 2
+\BOOKMARK [2][-]{section*.3}{True Trajectory Generation}{section*.2}% 3
+\BOOKMARK [2][-]{section*.4}{Measurement Modeling}{section*.2}% 4
+\BOOKMARK [3][-]{section*.5}{GPS Pseudoranges:}{section*.4}% 5
+\BOOKMARK [3][-]{section*.6}{Inertial Measurement Unit}{section*.4}% 6
+\BOOKMARK [1][-]{section*.7}{Preliminary and Expected Results}{}% 7

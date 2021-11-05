@@ -30,16 +30,13 @@
 
 \maketitle{} 		
 
-\begin{abstract}
-With renewed intrest in manned and robotic missions to Earth's moon with the advent of NASA's Artemis Program, robust tecniques for navigating spacecraft within cislunar space are necessary. 
-\end{abstract}
-
 \section{Introduction}
+With renewed intrest in manned and robotic missions to Earth's moon with the advent of NASA's Artemis Program, robust tecniques for navigating spacecraft within cislunar space are necessary. This project will investigate the feasibility of employing pseudorange measurements from the existing GPS satelite constelation alone, as well as with an additional Moon based constilation of navigation satelites, for navigating a low-thrust spacecraft as it spirals towards the target Near-Rectilinear Halo Orbit (NRHO) of the Artemis Lunar Gateway station, starting from a Geostationary Transfer Orbit (GTO) while employing both an Extended and Unscented Kalman Filter. 
 
 \section{Technical Plan}
-A feasibility study will be performed to investigate the robustness of GPS based inertial navitgation for a spacecraft traversing from a Geostationary Transfer Orbit (GTO) to the target Near-Rectilinear Halo Orbit (NRHO) of the Artemis Lunar Gateway station. The true GTO to NRHO trajectory has be generated for a low-thrust spacecraft by employing Circular Restricted Three-Body Problem (CR3BP) dynamics, such that fuel use is minimized. An Extended Kalman Filter (EKF) has also been developed, which employs GPS pseudorange and accelerometer measurements, for estimating the inertial states (e.g., position and velocity) and mass of a spacecraft as it travels along the true trajectory. An Unscented Kalman Filter (UKF) will also be developed which estimates the inertial states and mass by employing the same measurements. The performance of both the EKF and UKF will be analyzed through Monte Carlo analysis.
+A feasibility study will be performed to investigate the robustness of GPS based inertial navitgation for a spacecraft traversing from a GTO to the NRHO target of the Gateway station. The true GTO to NRHO trajectory has be generated for a low-thrust spacecraft by employing Circular Restricted Three-Body Problem (CR3BP) dynamics, such that fuel use is minimized. An Extended Kalman Filter (EKF) has also been developed, which employs GPS pseudorange and accelerometer measurements, for estimating the inertial states (e.g., position and velocity) and mass of a spacecraft as it travels along the true trajectory. An Unscented Kalman Filter (UKF) will also be developed which estimates the inertial states and mass by employing the same measurements. A simple constilation of Moon orbiting navigation satelites will also be modeled, and the developed EKF and UKF will be modified to ingest pseudorange measurements from the Lunar constelation, in addition to the existing GPS constelation. The performance of both the EKF and UKF, with and without pseudorange measurements from Lunar based navigation satelites, will be analyzed through Monte Carlo analysis.
 \subsection{True Trajectory Generation}
-The true low-thrust trajectory traversed by the spacecraft has been generated with CR3BP dynamics and a fully continuous, constant specific impluse thrust model by employing the \textit{indirect} approach to optimizing a spacecraft trajectory. Although the details of indirect optimal control are outside of the scope of this project, this category of trajectory optimization methods employ variational calculus and Pontryagin's Maximum Principle to analytically derive the necesary conditions of optimality. This process results in the formation of a two-point boundary value problem (TPBVP) which is solved by fiding the set of time varying co-state (adjoint) variables at the initial epoch such that the boudary conditions are satisfied. Details of several tecniques used to generate the true trajectory can be found in Reference \citenum{Hecht_2021}.
+The true low-thrust trajectory traversed by the spacecraft has been generated with CR3BP dynamics and a fully continuous, constant specific impluse thrust model by employing the \textit{indirect} approach to optimizing a spacecraft trajectory. Although the details of indirect optimal control are outside of the scope of this project, this category of trajectory optimization methods employ variational calculus and Pontryagin's Maximum Principle to analytically derive the necesary conditions of optimality. This process results in the formation of a two-point boundary value problem (TPBVP) which is solved by finding the set of time varying co-state (adjoint) variables at the initial epoch such that the boudary conditions are satisfied. Details of several tecniques used to generate the true trajectory can be found in Reference \citenum{Hecht_2021}.
 
 %For the minimum-fuel trajectory optimization problem, the cost function is given by
 %\begin{equation}
@@ -93,7 +90,7 @@ The true low-thrust trajectory traversed by the spacecraft has been generated wi
 	\begin{tabular}{ccc}
 		\hline
 		\hline
-		Constant             		 & Value        & Units         \\ 
+		Parameter             		 & Value        & Units         \\ 
 		\hline
 		Initial Mass ($m_0$) 		 & 1500 		& kg            \\
 		Exhaust Velocity (c) 		 & 29.43        & km/$\text{s}$  \\
@@ -104,23 +101,14 @@ The true low-thrust trajectory traversed by the spacecraft has been generated wi
 	\end{tabular}
 \end{table}
 
-By solving the TPBVP derived through indirect optimal control for a spacecraft with parameters shown in Table \ref{tab:traj_params}, the initial co-states were found to be
-\begin{align*}
-	\boldsymbol{\lambda}_r(t_0) &= \begin{bmatrix}
-		5.963713007227692 & 12.999481348176722 & 1.6584130970663207
-	\end{bmatrix}^T \\
-	\boldsymbol{\lambda}_v(t_0) &= \begin{bmatrix}
-		-0.04062357612068792 & 0.018558730104232632 & -0.0004993971529784666
-	\end{bmatrix}^T \\
-	\lambda_m(t_f) &= 0.12200533102974148
-\end{align*}
+By solving the TPBVP derived through indirect optimal control for a spacecraft with parameters shown in Table \ref{tab:traj_params}, the optimal trajectory showin in Figure \ref{fig:traj} was generated, where coasting arcs are shown in blue, thrusting arcs in red, the target NRHO in dashed black lines, and the location of the Earth and Moon as black $\times$ symbols (please note the trajectory is shown in an inertial reference frame and not the CR3BP synodic reference frame).
 \begin{figure}[hbt!]
 	\centering
-	\includegraphics[width=0.65\textwidth]{./../../figures/iTraj.eps}
+	\includegraphics[width=0.6\textwidth]{./../../figures/iTraj.eps}
 	\caption{True Low-Thrust Trajectory in Inertial Reference Frame}
 	\label{fig:traj}
 \end{figure}
-which result in the trajectory shown in Figure \ref{fig:traj}, where coasting arcs are shown in blue, thrusting arcs in red, the target NRHO in dashed black lines, and the location of the Earth and Moon as black $\times$ symbols (please note the trajectory is shown in an inertial reference frame and not the CR3BP synodic reference frame). As can be seen, the trajectory consits of multiple sprirals about the Earth with gradually increasing apogee before finally reaching the NRHO. Therefore, this trajectory should provide a good indication of the developed filters performance in both near Earth and cislunar space.
+As can be seen, the trajectory consits of multiple sprirals about the Earth with gradually increasing apogee before finally reaching the NRHO. Therefore, this trajectory should provide a good indication of the developed filters performance in both near Earth and cislunar space.
 
 \subsection{Measurement Modeling}
 \subsubsection{GPS Pseudoranges:}
@@ -141,7 +129,7 @@ with relevent partials given by
 \end{equation}
 where $(\cdot)^*_k$ is employed to indicated a term associated with the reference trajectory at time $t_k$.
 
-High precision ephemeris data projects provided by IGS \cite{IGSproducts} will be considered as truth and employed to compute the position of GPS satelites at signal transmission times when generating simulated GPS pseudorange measurements. Perturbed trajectory solutions from the same ephemeris will also be employed when computing expected GPS pseudorange measurements so simulate much less precise broadcast ephemeris. IGS ephemeris data products are defined with respect to the Earth fixed IGS14 reference frame, and therefore must be rotated to the Geocentric Celestial Reference Frame (e.g., J200 frame) before they can be employed for inertial navigation. Details of this rotation can be found in Refercne \citenum{Vallado_2013}.
+High precision ephemeris data projects provided by IGS \cite{IGSproducts} will be considered as truth and employed to compute the position of GPS satelites at signal transmission times when generating simulated GPS pseudorange measurements. Ephemeris for the Lunar based constilation of navigation satelites will be created by assuming the satelites travel along perfectly circular orbits about the Moon. Perturbed trajectory solutions from the same ephemerides will also be employed when computing expected pseudorange measurements so as to simulate much less precise broadcast ephemeris. IGS ephemeris data products are defined with respect to the Earth fixed IGS14 reference frame, and therefore must be rotated to the Geocentric Celestial Reference Frame (e.g., J200 frame) before they can be employed for inertial navigation. Details of this rotation can be found in Refercne \citenum{Vallado_2013}.
 
 \subsubsection{Inertial Measurement Unit}
 A highly simplified model of IMU accelerometer measurements will be employed in which accelerometer scale factor error, bias, nonorthoganality, and misalighment are assumed negligable and is given by
@@ -156,15 +144,37 @@ where $\mathbf{a}_k^i$ is the inertial acceleration of the spacecraft at time $t
 where $\mathbf{r}_{ls}$ is the vector from the spacecraft to the Moon, $r$ and $r_{ls}$ are the Euclidian norm of $\mathbf{r}$ and $\mathbf{r_{ls}}$ respectively, $\mu$ and $\mu_l$ are the gravitational parameters of the Earth and Moon respectively, $T_{max}$ is the spacecrafts maximum possible thrust, $u$ is the thrust throttling factor, and $\boldsymbol{\alpha}$ is the direction of applied propulsive force.
 
 \section{Preliminary and Expected Results}
-Spacecraft used 127 kg of fuel. Small ammount makes mass hardly observable.
+Promising preliminary results have already been generated employing the developed EKF with statistical parameters displayed in Table \ref{tab:sim_params}. Accelerometer measurements were processed every 30 seconds, while GPS pseudorange measurements were processed every 15 minutes. Figures \ref{fig:posvel_err} and \ref{fig:mass_err} display the filters error and uncertainty for the inertial and mass states respectively. As can be seen when looking at Figure \ref{fig:posvel_err}, the filter's error is bounded by its realization of the estimation uncertainty $3\sigma$ bounds when estimating all of the inertial states of the spacecraft. Furthermore, the position and velocity of the spacecraft are estimated to within 2 km and 1 m/s for a majority of the transfer from GTO to NRHO, although this is dificult to see when looking at results for the entire 33.1 day trajectory. Detailed analysis of estimation performance will be discussed in the final paper. Looking at Figure \ref{fig:mass_err}, we can see that the filter's performance when estimating the mass of the spacecraft is less than ideal. The mass estimate does appear to be biased, and the filter does not properly characterize the mass estimation error uncertainty near the end of the trajectory as the spacecraft approaches the NRHO. This is likely due to the low acceleration due to thrust when compared to gravitational acceleration due to the Earth and Moon, although further analysis is required before this can be said with certainy. 
 
-\begin{figure}[hbt!]
+It is expected that the EKF's estimation accuracy will improve once futher tuning of the filter has been performed, and slighly greater performance is expected to be observed for the soon to be developed UKF. Through Monte Carlo analysis, each filter's realization of it's error uncertainty will be compared with the Monte Carlo error statistics to investigate each filter's ability to properly characterize it's uncertainty, and it is expected that the UKF will perform slightly better in this regard due to the use of the unscented transform to propagate uncertainty. The estimation bias of each filterm will also be investigated.
+
+\begin{table}[]
+	\centering
+	\caption{Simulation Parameters}
+	\label{tab:sim_params}
+	\begin{tabular}{ccc}
+		\hline
+		\hline
+		Parameter             		 & Distribution ($1\sigma$) & Units \\ 
+		\hline
+		GPS Pseudorange Noise 		 & 1 		    & km            	\\
+		GPS Broadcase Ephem. Error   & 5            & km  				\\
+		Accelerometer Noise          & 10  			& mm/$\text{s}^2$  	\\ 
+		\hline
+		Initial Position Error       & 0.1  		& km             	\\
+		Initial Velocity Error   	 & 10      		& m/s          		\\
+		Initial Mass Error 			 & 1			& mg 				\\
+		\hline \hline
+	\end{tabular}
+\end{table}
+
+\begin{figure}[]
 	\centering
 	\includegraphics[width=0.8\textwidth]{./../../figures/EKFPosVelError.eps}
 	\caption{Position and Velocity Estimation Error and Uncertainty}
 	\label{fig:posvel_err}
 \end{figure}
-\begin{figure}[hbt!]
+\begin{figure}[]
 	\centering
 	\includegraphics[width=0.4\textwidth]{./../../figures/EKFMass.eps}
 	\caption{Mass Estimation Error and Uncertainty}
