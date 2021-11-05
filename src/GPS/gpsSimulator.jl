@@ -254,7 +254,7 @@ function plotGPS(gps::GPSSim, sats::AbstractVector)
     set(gca, "fontname", "Times New Roman", "fontsize", 10)
     set(gcf, "PaperUnits", "inches", "PaperPosition", [0.25, 0.25, 5.0, 4.0])
     set(gcf, "PaperPositionMode", "Manual")
-    print("./figures/GPSConst.pdf", "-dpdf", "-r300")
+    print("./figures/GPSConst.eps", "-depsc", "-r300")
     """
 end
 

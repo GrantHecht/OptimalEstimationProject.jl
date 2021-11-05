@@ -346,7 +346,7 @@ function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
         %set(leg1, "fontname", "Times New Roman", "fontsize", 10, "Interpreter", "latex")
         set(gcf, "PaperUnits", "inches", "PaperPosition", [0.25, 0.25, 5.0, 4.0])
         set(gcf, "PaperPositionMode", "Manual")
-        print("./figures/" + $fs + "Traj.pdf", "-dpdf", "-r600")
+        print("./figures/" + $fs + "Traj.eps", "-depsc", "-r600")
     """
 end
 
