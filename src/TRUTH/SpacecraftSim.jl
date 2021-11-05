@@ -289,7 +289,7 @@ function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
 
         if $fs == "i"
             figure()
-            subplot(2,1,1)
+            sp1 = subplot(2,1,1);
             plot(xt(:,1), xt(:,2), 'r')
             hold on
             plot(xc(:,1), xc(:,2), 'b')
@@ -302,10 +302,10 @@ function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
             % Plot Moon
             scatter($(ss.ps.crp.LU), 0.0, "xk")
 
-            axis equal 
+            %axis equal 
             grid on
 
-            subplot(2,1,2)
+            sp2 = subplot(2,1,2);
             plot(xt(:,1), xt(:,3), 'r')
             hold on
             plot(xc(:,1), xc(:,3), 'b')
@@ -318,11 +318,13 @@ function PlotTrajectory(ss::SpacecraftSim, ts; frame = :inertial)
             % Plot Moon
             scatter($(ss.ps.crp.LU), 0.0, "xk")
 
-            axis equal 
+            %axis equal 
             grid on
 
             %leg1 = legend("Thrusting Arc", "Coasting Arc", "Target NRHO");
             xlabel("X, km", "Interpreter", "latex")
+
+            %linkaxes([sp1,sp2,'x'])
         else
             figure()
             plot(xt(:,1), xt(:,2), 'r')
