@@ -8,9 +8,9 @@ function rotateData(rawData::DataFrame, erps::Matrix)
     data = zeros(length(rawData.MJD), 10)
 
     # Read in nutation data
-    Ax = CSV.File(datadir("tab5")*"\\Ax.txt"; delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
-    Ay = CSV.File(datadir("tab5")*"\\Ay.txt"; delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
-    As = CSV.File(datadir("tab5")*"\\As.txt"; delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
+    Ax = CSV.File(datadir("tab5")*(Sys.isunix() ? "/Ax.txt" : "\\Ax.txt"); delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
+    Ay = CSV.File(datadir("tab5")*(Sys.isunix() ? "/Ay.txt" : "\\Ay.txt"); delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
+    As = CSV.File(datadir("tab5")*(Sys.isunix() ? "/As.txt" : "\\As.txt"); delim = " ", ignorerepeated = true, header = 0, types = Float64) |> Tables.matrix
 
     # Loop through data and rotate
     @showprogress "Rotating ephemeris to J2000..." for i in 1:length(rawData.MJD)

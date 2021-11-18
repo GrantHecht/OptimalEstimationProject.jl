@@ -21,9 +21,9 @@ function readERPs(gpsWeekStart, weekDayStart, gpsWeekEnd, weekDayEnd)
     # Read in last week data if necessary 
     if needLastWeek
         # Open file
-        erpFile = datadir("igs") * "\\igs" * string(gpsWeekStart - 1) * "7.erp"
+        erpFile = datadir("igs") * (Sys.isunix() ? "/igs" : "\\igs") * string(gpsWeekStart - 1) * "7.erp"
         if !isfile(erpFile)
-            throw(ErrorException("The file 'igs"*string(gpsWeekStart - 1)*"7.erp' does not exist in the folder ./data/igs and must be downloaded from CDDIS.\n" * 
+            throw(ErrorException("The file " * erpFile * " does not exist and must be downloaded from CDDIS.\n" * 
             "The file can be found at 'https://cddis.nasa.gov/archive/gnss/products/'"))
         end
         f = open(erpFile)
@@ -50,7 +50,7 @@ function readERPs(gpsWeekStart, weekDayStart, gpsWeekEnd, weekDayEnd)
     weeks = gpsWeekStart:gpsWeekEnd
     for week in weeks
         # Open file
-        erpFile = datadir("igs") * "\\igs" * string(week) * "7.erp"
+        erpFile = datadir("igs") * (Sys.isunix() ? "/igs" : "\\igs") * string(week) * "7.erp"
         if !isfile(erpFile)
             throw(ErrorException("The file 'igs"*string(week)*"7.erp' does not exist in the folder ./data/igs and must be downloaded from CDDIS.\n" * 
             "The file can be found at 'https://cddis.nasa.gov/archive/gnss/products/'"))
@@ -75,7 +75,7 @@ function readERPs(gpsWeekStart, weekDayStart, gpsWeekEnd, weekDayEnd)
     # Read in last week data if necessary 
     if needNextWeek
         # Open file
-        erpFile = datadir("igs") * "\\igs" * string(gpsWeekEnd + 1) * "7.erp"
+        erpFile = datadir("igs") * (Sys.isunix() ? "/igs" : "\\igs") * string(gpsWeekEnd + 1) * "7.erp"
         if !isfile(erpFile)
             throw(ErrorException("The file 'igs"*string(gpsWeekEnd + 1)*"7.erp' does not exist in the folder ./data/igs and must be downloaded from CDDIS.\n" * 
             "The file can be found at 'https://cddis.nasa.gov/archive/gnss/products/'"))
