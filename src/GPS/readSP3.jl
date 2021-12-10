@@ -2,7 +2,8 @@
 function readSP3(gpsWeek, day)
 
     # Construct string
-    sp3File = datadir("igs") * "\\igs" * string(gpsWeek) * string(day) * ".sp3"
+    #sp3File = datadir("igs") * "\\igs" * string(gpsWeek) * string(day) * ".sp3"
+    sp3File = datadir("igs", "igs" * string(gpsWeek) * string(day) * ".sp3")
     if !isfile(sp3File)
         throw(ErrorException("The file 'igs"*string(gpsWeek)*string(day)*".sp3' does not exist in the folder ./data/igs and must be downloaded from CDDIS.\n" * 
         "The file can be found at 'https://cddis.nasa.gov/archive/gnss/products/'"))
