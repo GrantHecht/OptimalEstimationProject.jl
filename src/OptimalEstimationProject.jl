@@ -4,6 +4,7 @@ using DataFrames
 using IndirectTrajOpt
 using StaticArrays
 using LinearAlgebra
+using SparseArrays
 using DifferentialEquations
 using Roots
 using DataInterpolations
