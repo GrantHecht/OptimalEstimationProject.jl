@@ -24,7 +24,7 @@ include("GPS/readERP.jl")
 include("GPS/computePrecessionNutation.jl")
 include("GPS/rotateData.jl")
 include("GPS/genInterpolants.jl")
-include("GPS/GPSSimulator.jl")
+include("GPS/gpsSimulator.jl")
 include("GPS/transmissionTimeFunction.jl")
 
 # IMU Simulation
