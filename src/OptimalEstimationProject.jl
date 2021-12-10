@@ -47,5 +47,6 @@ export SpacecraftSim
 export EKF
 export runFilter!
 export plotGPS
+export plotEKF
 
 end
