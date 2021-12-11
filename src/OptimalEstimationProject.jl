@@ -6,6 +6,9 @@ using StaticArrays
 using LinearAlgebra
 using SparseArrays
 using DifferentialEquations
+using Statistics
+using StatsBase
+using LoopVectorization
 using Roots
 using DataInterpolations
 using CSV
@@ -15,6 +18,9 @@ using ProgressMeter
 using AstroTime; AstroTime.update()
 using EarthOrientation
 using MATLAB
+
+# Linear Algebra Utilities
+include("UTILS/vecOuterProd.jl")
 
 # Time Utilities
 include("TIME/gps2MJD.jl")
@@ -36,6 +42,7 @@ include("TRUTH/SpacecraftSim.jl")
 
 # Filters
 include("FILTERS/EKF.jl")
+include("FILTERS/UKF.jl")
 
 # Precompilation
 precompile(GPSSim, (Int64, Int64, Int64, Int64))
@@ -45,6 +52,7 @@ export GPSSim
 export IMUSim
 export SpacecraftSim
 export EKF
+export UKF
 export runFilter!
 export plotGPS
 export plotEKF

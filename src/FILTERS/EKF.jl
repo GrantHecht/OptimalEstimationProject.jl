@@ -58,7 +58,7 @@ function EKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim; lu
     rs      = zeros(length(ts), 32 + 3)
     txp     = zeros((steps2save + 1)*length(ts) + 1); txp[1] = scSim.t0
     xhats   = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :] .= xhat0
-    es      = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :]
+    es      = zeros((steps2save + 1)*length(ts) + 1, 7);
     Ps      = zeros((steps2save + 1)*length(ts) + 1, 7); Ps[1, :] .= diag(P0)
     P⁻      = zeros(7,7)
     P⁺      = deepcopy(P0)
