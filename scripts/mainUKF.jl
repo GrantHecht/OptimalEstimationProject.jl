@@ -30,7 +30,7 @@ ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*8640
 
 # Process noise covariance
 R       = Diagonal((σρ^2 + 3*σr^2)*ones(32)) 
-Q       = Diagonal([0.0, 0.0, 0.0, 1e-10, 1e-10, 1e-10, 5e-4])
+Q       = Diagonal([0.0, 0.0, 0.0, 1e-9, 1e-9, 1e-9, 5e-4])
 
 # GPS Simulation Span
 startWeek   = 2170
@@ -45,19 +45,11 @@ gpssim = GPSSim(startWeek, startDay, endWeek, endDay; σρ = σρ, σr = σr)
 imusim = IMUSim(σa)
 
 # Create EKF
-ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 2, lunaPerts = true);
+ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; 
+    steps2save = 10, lunaPerts = false, α = 2.0, β = 0.0, κ = 0.0, resample = true);
+ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 10, lunaPerts = true);
 
 OptimalEstimationProject.propagate!(ukf)
-
-# Run filter
-#runFilter!(ekf)
-
-# Get true trajectory for plotting
-#xtrue = zeros(length(ekf.txp), 3)
-#for i in 1:length(ekf.txp)
-#    (y0l, us) = OptimalEstimationProject.GetStateAndControl(scsim, ekf.txp[i])
-#    xtrue[i, :] .= y0l[1:3]
-#end
-
-# Plotting
-#plotEKF(ekf, xtrue, length(ekf.txp))
+OptimalEstimationProject.updateGPS!(ukf)
+OptimalEstimationProject.propagate!(ekf)
+OptimalEstimationProject.updateGPS!(ekf)

@@ -8,7 +8,6 @@ using SparseArrays
 using DifferentialEquations
 using Statistics
 using StatsBase
-using LoopVectorization
 using Roots
 using DataInterpolations
 using CSV
@@ -20,7 +19,8 @@ using EarthOrientation
 using MATLAB
 
 # Linear Algebra Utilities
-include("UTILS/vecOuterProd.jl")
+#using LoopVectorization # Using BLAS routines rather than pure Julian linear algebra 
+#include("UTILS/vecOuterProd.jl")
 
 # Time Utilities
 include("TIME/gps2MJD.jl")

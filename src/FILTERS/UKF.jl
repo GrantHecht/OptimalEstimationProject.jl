@@ -27,7 +27,13 @@ mutable struct UKF
     χd::Matrix{Float64}
     P⁺::Matrix{Float64}
     P⁻::Matrix{Float64}
+    Py::Matrix{Float64}
+    Pyt::Matrix{Float64}
+    Pxy::Matrix{Float64}
     Q::Diagonal{Float64, Vector{Float64}}
+    expmeas::Matrix{Float64}
+    expmeasd::Matrix{Float64}
+    yhat::Vector{Float64}
 
     # Simulators
     gpsSim::GPSSim
@@ -52,14 +58,17 @@ mutable struct UKF
 
     # Luna perturbation flag
     lunaPerts::Bool
+
+    # Resample sigma points for update
+    resamp::Bool
 end
 
 function UKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim; 
-    α = 1e-3, β = 2, κ = 1.0, lunaPerts = false, steps2save = 5)
+    α = 1.0, β = 2.0, κ = 1.0, lunaPerts = false, steps2save = 5, resample = false)
 
     # Instantiate preallocated matricies
     ixp     = 1
-    rs      = zeros(length(ts), 32 + 3) # THIS PROBABLY NEEDS TO CHANGE
+    rs      = zeros(length(ts), 35)
     txp     = zeros((steps2save + 1)*length(ts) + 1); txp[1] = scSim.t0
     xhats   = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :] .= xhat0
     es      = zeros((steps2save + 1)*length(ts) + 1, 7);
@@ -68,6 +77,12 @@ function UKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim;
     χd      = zeros(7,15)
     P⁻      = zeros(7,7)
     P⁺      = deepcopy(P0) 
+    Py      = zeros(35, 35)
+    Pyt     = zeros(35, 35)
+    Pxy     = zeros(7, 35)
+    expmeas = zeros(35, 15)
+    expmeasd= zeros(35, 15)
+    yhat    = zeros(35)
    
     # Compute IMU Δt from ts vector 
     imuΔt   = ts[2] - ts[1]
@@ -81,7 +96,8 @@ function UKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim;
     γ       = sqrt(7.0 + λ)
 
     # Instantiate UKF
-    UKF(ts,imuΔt,gpsΔt,rs,txp,ixp,xhats,es,Ps,α,β,κ,λ,γ,χ,χd,P⁺,P⁻,Q,gpsSim,imuSim,scSim,σ2GPS,σ2Acc,steps2save,0,true,false,lunaPerts)
+    UKF(ts,imuΔt,gpsΔt,rs,txp,ixp,xhats,es,Ps,α,β,κ,λ,γ,χ,χd,P⁺,P⁻,Py,Pyt,Pxy,Q,expmeas,expmeasd,yhat,
+        gpsSim,imuSim,scSim,σ2GPS,σ2Acc,steps2save,0,true,false,lunaPerts,resample)
 end
 
 function propagate!(ukf::UKF)
@@ -158,15 +174,158 @@ function propagate!(ukf::UKF)
         ukf.P⁻ .*= 0.0
         for j in 1:14
             @views ukf.χd[:,j] .= ukf.χ[:,j] .- ukf.xhats[i,:]
-            @views vecOuterProd!(ukf.P⁺, ukf.χd[:,j], ukf.χd[:,j]) # Using P⁺ for storage of data
+            @views mul!(ukf.P⁺, ukf.χd[:,j], transpose(ukf.χd[:,j])) # Using P⁺ for storage of data
             ukf.P⁻ .+= wi.*ukf.P⁺
         end
         @views ukf.χd[:,15] .= ukf.χ[:,15] .- ukf.xhats[i,:]
-        @views vecOuterProd!(ukf.P⁺, ukf.χd[:,15], ukf.χd[:,15])
-        ukf.P⁻ .+= w0c.*ukf.P⁺ .+ ukf.Q
+        @views mul!(ukf.P⁺, ukf.χd[:,15], transpose(ukf.χd[:,15]))
+        ukf.P⁻ .+= w0c.*ukf.P⁺
 
         @views ukf.Ps[i,:] .= diag(ukf.P⁻)
         ukf.ixp = i
+    end
+end
+
+function updateGPS!(ukf::UKF)
+    if ukf.updated == true
+        throw(ErrorException("Cannot update again before propagating."))
+    else
+        ukf.updated = true 
+    end
+
+    # Get current time 
+    t   = ukf.ts[ukf.k]
+
+    # Get true state 
+    (ytrue, u) = GetStateAndControl(ukf.scSim, t)
+
+    # Generate GPS measurements 
+    @views measGPS = gpsMeasurement(ukf.gpsSim, ytrue[1:3], t)
+
+    # Get satelite ids 
+    @views sats = measGPS[2:2:end]
+    numSats = length(sats)
+
+    # Resample sigma points if desired 
+    if ukf.resamp
+        # Compute sigma points
+        C       = cholesky(ukf.P⁻)
+        for i in 1:7
+            @views ukf.χ[:,2*i - 1] .= ukf.xhats[ukf.ixp, :] .+ ukf.γ.*C.L[:,i]
+            @views ukf.χ[:,2*i]     .= ukf.xhats[ukf.ixp, :] .- ukf.γ.*C.L[:,i]
+        end
+        ukf.χ[:,15] .= ukf.xhats[ukf.ixp, :]
+
+        # Compute sigma point diffs
+        for i in 1:15
+            @views ukf.χd[:,i] .= ukf.χ[:,i] .- ukf.xhats[ukf.ixp, :]
+        end
+    end
+
+    # Compute expected measurements
+    ukf.expmeas .*= 0.0
+    for i in 1:15
+        # Get expected gps measurement
+        @views (expMeasGPS, ps) = gpsMeasurement(ukf.gpsSim, ukf.χ[1:3,i], sats, t; type = :expected)
+        for j in 1:numSats 
+            ukf.expmeas[j,i] = expMeasGPS[3 + 2*(j - 1)]
+        end
+    end
+
+    # Compute weights
+    w0m     = ukf.λ / (7.0 + ukf.λ)
+    w0c     = w0m + (1 - ukf.α^2 + ukf.β)
+    wi      = 1.0 / (2.0*(7 + ukf.λ))
+
+    # Compute mean observation
+    ukf.yhat .*= 0.0
+    for i in 1:14
+        @views ukf.yhat[1:numSats] .+= wi.*ukf.expmeas[1:numSats,i]
+    end
+    @views ukf.yhat[1:numSats] .+= w0m.*ukf.expmeas[1:numSats,15]
+
+    # Compute residuals with measurement rejection
+    accMeas     = Vector{Bool}(undef, 35); accMeas .= false
+    rejectTol   = 1e9
+    numRejected = 0
+    for i in 1:numSats 
+        r = measGPS[3 + 2*(i - 1)] - ukf.yhat[i]
+        if r < rejectTol
+            accMeas[i] = true
+            ukf.rs[ukf.k, i - numRejected] = r
+        else
+            numRejected += 1
+        end
+    end
+
+    # Compute output covariance
+    ukf.Py .= 0.0
+    for j in 1:14
+        @views ukf.expmeasd[1:numSats,j] .= ukf.expmeas[1:numSats,j] .- ukf.yhat[1:numSats]
+        @views mul!(ukf.Py[1:numSats-numRejected,1:numSats-numRejected], 
+            ukf.expmeasd[accMeas,j], transpose(ukf.expmeasd[accMeas,j]), wi, 1.0)
+        #@views ukf.Py[1:numSats-numRejected,1:numSats-numRejected] .+= 
+        #    wi.*ukf.Pyt[1:numSats-numRejected,1:numSats-numRejected]
+    end
+    @views ukf.expmeasd[1:numSats,15] .= ukf.expmeas[1:numSats,15] .- ukf.yhat[1:numSats]
+    @views mul!(ukf.Py[1:numSats-numRejected,1:numSats-numRejected], 
+        ukf.expmeasd[accMeas,15], transpose(ukf.expmeasd[accMeas,15]), w0c, 1.0)
+    #@views ukf.Py[1:numSats-numRejected,1:numSats-numRejected] .+= 
+    #    w0c.*ukf.Pyt[1:numSats-numRejected,1:numSats-numRejected]
+    for i in 1:numSats-numRejected; ukf.Py[i,i] += ukf.σ2GPS; end
+
+    # Compute cross covariance
+    ukf.Pxy .= 0.0
+    for j in 1:14
+        @views mul!(ukf.Pxy[1:7,1:numSats-numRejected], 
+            ukf.χd[:,j], transpose(ukf.expmeasd[accMeas,j]), wi, 1.0)
+        #@views ukf.Pxy[1:7,1:numSats-numRejected] .+= 
+        #    wi.*ukf.Pyt[1:7,1:numSats-numRejected]
+    end
+    @views mul!(ukf.Pxy[1:7,1:numSats-numRejected],
+        ukf.χd[:,15], transpose(ukf.expmeasd[accMeas,15]), w0c, 1.0)
+    #@views ukf.Pxy[1:7,1:numSats-numRejected] .+= 
+    #    w0c.*ukf.Pyt[1:7,1:numSats-numRejected]
+
+    # Compute gain 
+    @views Kfact = factorize(ukf.Py[1:numSats-numRejected,1:numSats-numRejected])
+    @views rdiv!(ukf.Pxy[1:7,1:numSats-numRejected], Kfact)
+
+    # Compute state update
+    ukf.ixp += 1
+    @views mul!(ukf.xhats[ukf.ixp, :], ukf.Pxy[1:7,1:numSats-numRejected], 
+        ukf.rs[1:numSats-numRejected])
+    ukf.xhats[ukf.ixp,:] .+= ukf.xhats[ukf.ixp - 1, :]
+
+    # Compute covariance update
+    ukf.P⁺ .= ukf.P⁻
+    @views mul!(ukf.Pyt[1:7,1:numSats-numRejected], ukf.Pxy[1:7,1:numSats-numRejected], 
+        ukf.Py[1:numSats-numRejected,1:numSats-numRejected])
+    @views mul!(ukf.P⁺, ukf.Pyt[1:7,1:numSats-numRejected], 
+        transpose(ukf.Pxy[1:7,1:numSats-numRejected]), -1.0, 1.0)
+
+    # Set time in storage vector
+    ukf.txp[ukf.ixp] = t
+
+    # Compute error
+    (ytrue,u) = GetStateAndControl(ukf.scSim, t)
+    @views ukf.es[ukf.ixp,:] .= ukf.xhats[ukf.ixp,:] .- ytrue[1:7]
+
+    # Set covariance diag 
+    ukf.Ps[ukf.ixp,:] .= diag(ukf.P⁺)
+
+    # Force covariance symmetry
+    for r in 1:6
+        for c in r+1:7
+            ukf.P⁺[r,c] = ukf.P⁺[c,r]
+        end
+    end
+end
+
+function runFilter!(ukf::UKF)
+    for i in 1:length(ukf.ts)
+        propagate!(ukf)
+        updateGPS!(ukf)
     end
 end
 
