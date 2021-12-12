@@ -5,6 +5,7 @@ using IndirectTrajOpt
 using StaticArrays
 using LinearAlgebra
 using SparseArrays
+using SuiteSparse
 using DifferentialEquations
 using Statistics
 using StatsBase
