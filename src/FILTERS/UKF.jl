@@ -126,7 +126,7 @@ function propagate!(ukf::UKF)
     # Get time 
     if ukf.k == 1
         t0  = ukf.scSim.t0 
-        tf  = ukf.ts[1]
+        tf  = ukf.ts[ukf.k]
     else
         t0  = ukf.ts[ukf.k - 1]
         tf  = ukf.ts[ukf.k]
@@ -234,7 +234,7 @@ function updateGPS!(ukf::UKF)
 
     # Compute expected measurements
     ukf.expmeas .*= 0.0
-    for i in 1:15
+    for i in 1:2*ukf.L + 1
         # Get expected gps measurement
         @views (expMeasGPS, ps) = gpsMeasurement(ukf.gpsSim, ukf.χ[1:3,i], sats, t; type = :expected)
         for j in 1:numSats 
@@ -243,20 +243,20 @@ function updateGPS!(ukf::UKF)
     end
 
     # Compute weights
-    w0m     = ukf.λ / (7.0 + ukf.λ)
+    w0m     = ukf.λ / (ukf.L + ukf.λ)
     w0c     = w0m + (1 - ukf.α^2 + ukf.β)
-    wi      = 1.0 / (2.0*(7 + ukf.λ))
+    wi      = 1.0 / (2.0*(ukf.L + ukf.λ))
 
     # Compute mean observation
-    ukf.yhat .*= 0.0
-    for i in 1:14
+    ukf.yhat .= 0.0
+    for i in 1:2*ukf.L
         @views ukf.yhat[1:numSats] .+= wi.*ukf.expmeas[1:numSats,i]
     end
-    @views ukf.yhat[1:numSats] .+= w0m.*ukf.expmeas[1:numSats,15]
+    @views ukf.yhat[1:numSats] .+= w0m.*ukf.expmeas[1:numSats,2*ukf.L + 1]
 
     # Compute residuals with measurement rejection
     accMeas     = Vector{Bool}(undef, 35); accMeas .= false
-    rejectTol   = 1e9
+    rejectTol   = 1e3
     numRejected = 0
     for i in 1:numSats 
         r = measGPS[3 + 2*(i - 1)] - ukf.yhat[i]
@@ -269,53 +269,44 @@ function updateGPS!(ukf::UKF)
     end
 
     # Compute output covariance
-    ukf.Py .= 0.0
-    for j in 1:14
-        @views ukf.expmeasd[1:numSats,j] .= ukf.expmeas[1:numSats,j] .- ukf.yhat[1:numSats]
-        @views mul!(ukf.Py[1:numSats-numRejected,1:numSats-numRejected], 
-            ukf.expmeasd[accMeas,j], transpose(ukf.expmeasd[accMeas,j]), wi, 1.0)
-        #@views ukf.Py[1:numSats-numRejected,1:numSats-numRejected] .+= 
-        #    wi.*ukf.Pyt[1:numSats-numRejected,1:numSats-numRejected]
+    ukf.Py      .= 0.0
+    numAccSats  = numSats - numRejected
+    for j in 1:2*ukf.L
+        @views ukf.expmeasd[1:numAccSats,j] .= ukf.expmeas[accMeas,j] .- ukf.yhat[accMeas]
+        @views mul!(ukf.Py[1:numAccSats,1:numAccSats], ukf.expmeasd[1:numAccSats,j], 
+            transpose(ukf.expmeasd[1:numAccSats,j]), wi, 1.0)
     end
-    @views ukf.expmeasd[1:numSats,15] .= ukf.expmeas[1:numSats,15] .- ukf.yhat[1:numSats]
-    @views mul!(ukf.Py[1:numSats-numRejected,1:numSats-numRejected], 
-        ukf.expmeasd[accMeas,15], transpose(ukf.expmeasd[accMeas,15]), w0c, 1.0)
-    #@views ukf.Py[1:numSats-numRejected,1:numSats-numRejected] .+= 
-    #    w0c.*ukf.Pyt[1:numSats-numRejected,1:numSats-numRejected]
-    for i in 1:numSats-numRejected; ukf.Py[i,i] += ukf.σ2GPS; end
+    @views ukf.expmeasd[1:numAccSats,2*ukf.L + 1] .= ukf.expmeas[accMeas,2*ukf.L + 1] .- ukf.yhat[accMeas]
+    @views mul!(ukf.Py[1:numAccSats,1:numAccSats], ukf.expmeasd[1:numAccSats,2*ukf.L + 1], 
+        transpose(ukf.expmeasd[1:numAccSats,2*ukf.L + 1]), w0c, 1.0)
 
-    # Compute cross covariance
+    # Update output covariance to innovations covariance (assuming linearly appearing measurement noise)
+    for i in 1:numAccSats; ukf.Py[i,i] += ukf.σ2GPS; end
+
+    # Compute cross correlation matrix
     ukf.Pxy .= 0.0
-    for j in 1:14
-        @views mul!(ukf.Pxy[1:7,1:numSats-numRejected], 
-            ukf.χd[:,j], transpose(ukf.expmeasd[accMeas,j]), wi, 1.0)
-        #@views ukf.Pxy[1:7,1:numSats-numRejected] .+= 
-        #    wi.*ukf.Pyt[1:7,1:numSats-numRejected]
+    for j in 1:2*ukf.L 
+        @views mul!(ukf.Pxy[1:7,1:numAccSats], ukf.χd[:,j], transpose(ukf.expmeasd[1:numAccSats,j]), wi, 1.0)
     end
-    @views mul!(ukf.Pxy[1:7,1:numSats-numRejected],
-        ukf.χd[:,15], transpose(ukf.expmeasd[accMeas,15]), w0c, 1.0)
-    #@views ukf.Pxy[1:7,1:numSats-numRejected] .+= 
-    #    w0c.*ukf.Pyt[1:7,1:numSats-numRejected]
+    @views mul!(ukf.Pxy[1:7,1:numAccSats], ukf.χd[:,2*ukf.L + 1], transpose(ukf.expmeasd[1:numAccSats,2*ukf.L + 1]), w0c, 1.0)
 
     # Compute gain 
-    @views Kfact = factorize(ukf.Py[1:numSats-numRejected,1:numSats-numRejected])
-    @views rdiv!(ukf.Pxy[1:7,1:numSats-numRejected], Kfact)
+    @views Pyfact = factorize(ukf.Py[1:numAccSats,1:numAccSats])
+    @views rdiv!(ukf.Pxy[1:7,1:numAccSats], Pyfact)
 
-    # Compute state update
+    # Update storage matricies
+    # Time
     ukf.ixp += 1
-    @views mul!(ukf.xhats[ukf.ixp, :], ukf.Pxy[1:7,1:numSats-numRejected], 
-        ukf.rs[1:numSats-numRejected])
+    ukf.txp[ukf.ixp] = t
+
+    # Compute state update and save
+    @views mul!(ukf.xhats[ukf.ixp, :], ukf.Pxy[1:7,1:numAccSats], ukf.rs[ukf.k, 1:numAccSats])
     ukf.xhats[ukf.ixp,:] .+= ukf.xhats[ukf.ixp - 1, :]
 
     # Compute covariance update
     ukf.P⁺ .= ukf.P⁻
-    @views mul!(ukf.Pyt[1:7,1:numSats-numRejected], ukf.Pxy[1:7,1:numSats-numRejected], 
-        ukf.Py[1:numSats-numRejected,1:numSats-numRejected])
-    @views mul!(ukf.P⁺, ukf.Pyt[1:7,1:numSats-numRejected], 
-        transpose(ukf.Pxy[1:7,1:numSats-numRejected]), -1.0, 1.0)
-
-    # Set time in storage vector
-    ukf.txp[ukf.ixp] = t
+    @views mul!(ukf.Pyt[1:7,1:numAccSats], ukf.Pxy[1:7,1:numAccSats], ukf.Py[1:numAccSats,1:numAccSats])
+    @views mul!(ukf.P⁺, ukf.Pyt[1:7,1:numAccSats], transpose(ukf.Pxy[1:7,1:numAccSats]), -1.0, 1.0)
 
     # Compute error
     (ytrue,u) = GetStateAndControl(ukf.scSim, t)
@@ -328,6 +319,13 @@ function updateGPS!(ukf::UKF)
     for r in 1:6
         for c in r+1:7
             ukf.P⁺[r,c] = ukf.P⁺[c,r]
+        end
+    end
+
+    # Update augmented covariance
+    for r in 1:7
+        for c in 1:7
+            ukf.Pa[r,c] = ukf.P⁺[r,c]       
         end
     end
 end
@@ -370,13 +368,13 @@ function rkProp(f, x0, ts, ukf::UKF)
                         xi1[6] + h*k3[6],
                         xi1[7] + h*k3[7]]
         k4  = f(xi4, ukf, ts[i] + h, χw)
-        xin = @SVector [xi1[1] + h*(k1[1] + k2[1] + k3[1] + k4[1])/6.0,
-                        xi1[2] + h*(k1[2] + k2[2] + k3[2] + k4[2])/6.0,
-                        xi1[3] + h*(k1[3] + k2[3] + k3[3] + k4[3])/6.0,
-                        xi1[4] + h*(k1[4] + k2[4] + k3[4] + k4[4])/6.0,
-                        xi1[5] + h*(k1[5] + k2[5] + k3[5] + k4[5])/6.0,
-                        xi1[6] + h*(k1[6] + k2[6] + k3[6] + k4[6])/6.0,
-                        xi1[7] + h*(k1[7] + k2[7] + k3[7] + k4[7])/6.0]
+        xin = @SVector [xi1[1] + h*(k1[1] + 2.0*k2[1] + 2.0*k3[1] + k4[1])/6.0,
+                        xi1[2] + h*(k1[2] + 2.0*k2[2] + 2.0*k3[2] + k4[2])/6.0,
+                        xi1[3] + h*(k1[3] + 2.0*k2[3] + 2.0*k3[3] + k4[3])/6.0,
+                        xi1[4] + h*(k1[4] + 2.0*k2[4] + 2.0*k3[4] + k4[4])/6.0,
+                        xi1[5] + h*(k1[5] + 2.0*k2[5] + 2.0*k3[5] + k4[5])/6.0,
+                        xi1[6] + h*(k1[6] + 2.0*k2[6] + 2.0*k3[6] + k4[6])/6.0,
+                        xi1[7] + h*(k1[7] + 2.0*k2[7] + 2.0*k3[7] + k4[7])/6.0]
     end
     return xin
 end
@@ -404,11 +402,11 @@ function ukfNoLunarPertEOM(y, ukf::UKF, t, χw)
     @views r    = norm(y[1:3])
     nμr3        = -μ/r^3
     at          = T*u[1] / y[7] 
-    dy          = @SVector [y[4] + w[1], y[5] + w[2], y[6] + w[3], 
-                            nμr3*y[1] + at*u[2] + w[4],
-                            nμr3*y[2] + at*u[3] + w[5],
-                            nμr3*y[3] + at*u[4] + w[6],
-                            -u[1]*T / ukf.scSim.ps.sp.c + w[7]]
+    dy          = @SVector [y[4] + χw[1], y[5] + χw[2], y[6] + χw[3], 
+                            nμr3*y[1] + at*u[2] + χw[4],
+                            nμr3*y[2] + at*u[3] + χw[5],
+                            nμr3*y[3] + at*u[4] + χw[6],
+                            -u[1]*T / ukf.scSim.ps.sp.c + χw[7]]
                             
     return dy
 end
@@ -446,11 +444,11 @@ function ukfWithLunarPertEOM(y, ukf::UKF, t, χw)
     @views r    = norm(y[1:3])
     nμr3        = -μ/r^3
     at          = T*u[1] / y[7] 
-    dy          = @SVector [y[4] + w[1], y[5] + w[2], y[6] + w[3], 
-                            nμr3*y[1] + al[1] + at*u[2] + w[4],
-                            nμr3*y[2] + al[2] + at*u[3] + w[5],
-                            nμr3*y[3] + al[3] + at*u[4] + w[6],
-                            -u[1]*T / ukf.scSim.ps.sp.c + w[7]]
+    dy          = @SVector [y[4] + χw[1], y[5] + χw[2], y[6] + χw[3], 
+                            nμr3*y[1] + al[1] + at*u[2] + χw[4],
+                            nμr3*y[2] + al[2] + at*u[3] + χw[5],
+                            nμr3*y[3] + al[3] + at*u[4] + χw[6],
+                            -u[1]*T / ukf.scSim.ps.sp.c + χw[7]]
     
     return dy
 end

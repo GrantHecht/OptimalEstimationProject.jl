@@ -24,13 +24,13 @@ gpsΔt   = 15*60     # [sec]
 ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*86400)
 
 # Measurement statistics
-σρ      = 1.0e-3 # [km]     Pseudorange noise standard deviation
-σr      = 5.0e-3 # [km]     GPS broadcast ephemeris standard deviation
-σa      = 1.0e-5 # [km/s^2] Accelerometer noise standard deviation 
+σρ      = 10.0e-3 # [km]     Pseudorange noise standard deviation
+σr      = 5.0e-3  # [km]     GPS broadcast ephemeris standard deviation
+σa      = 1.0e-5  # [km/s^2] Accelerometer noise standard deviation 
 
 # Process noise covariance
 R       = Diagonal((σρ^2 + 3*σr^2)*ones(32)) 
-Q       = Diagonal([1.0e-12, 1.0e-12, 1.0e-12, 1.0e-9, 1.0e-9, 1.0e-9, 5.0e-4])
+Q       = Diagonal([1.0e-14, 1.0e-14, 1.0e-14, 1.0e-10, 1.0e-10, 1.0e-10, 5.0e-4])
 
 # GPS Simulation Span
 startWeek   = 2170
@@ -46,10 +46,23 @@ imusim = IMUSim(σa)
 
 # Create EKF
 ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; 
-    lunaPerts = false, α = 2.0, β = 0.0, κ = 0.0, resample = false);
-#ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 10, lunaPerts = true);
+    lunaPerts = true, α = 1.0, β = 0.0, κ = 3.0+14.0, resample = false);
+ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 2, lunaPerts = true);
 
+for i in 1:50
 OptimalEstimationProject.propagate!(ukf)
-#OptimalEstimationProject.updateGPS!(ukf)
-#OptimalEstimationProject.propagate!(ekf)
-#OptimalEstimationProject.updateGPS!(ekf)
+OptimalEstimationProject.updateGPS!(ukf)
+OptimalEstimationProject.propagate!(ekf)
+OptimalEstimationProject.updateGPS!(ekf)
+end
+
+mat"""
+figure()
+plot($(ukf.txp[1:ukf.ixp]),     $(ukf.es[1:ukf.ixp,1]), "r")
+hold on
+plot($(ukf.txp[1:ukf.ixp]),     3*sqrt($(ukf.Ps[1:ukf.ixp,1])), "k")
+plot($(ukf.txp[1:ukf.ixp]),     -3*sqrt($(ukf.Ps[1:ukf.ixp,1])), "k")
+plot($(ekf.txp[1:ekf.ixp]),     $(ekf.es[1:ekf.ixp,1]), "--r")
+plot($(ekf.txp[1:ekf.ixp]),     3*sqrt($(ekf.Ps[1:ekf.ixp,1])), "--k")
+plot($(ekf.txp[1:ekf.ixp]),     -3*sqrt($(ekf.Ps[1:ekf.ixp,1])), "--k")
+"""
