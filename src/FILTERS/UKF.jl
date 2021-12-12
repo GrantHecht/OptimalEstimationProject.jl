@@ -22,9 +22,14 @@ mutable struct UKF
     λ::Float64
     γ::Float64
 
+    # Augmented state vector size 
+    L::Int
+
     # Preallocate matricies
     χ::Matrix{Float64}
     χd::Matrix{Float64}
+    Pa::SparseMatrixCSC{Float64, Int64}
+    C::SuiteSparse.CHOLMOD.Factor{Float64}
     P⁺::Matrix{Float64}
     P⁻::Matrix{Float64}
     Py::Matrix{Float64}
@@ -44,9 +49,6 @@ mutable struct UKF
     σ2GPS::Float64
     σ2Acc::Float64
 
-    # Steps to save per propagation
-    stp::Int64
-
     # Step Index
     k::Int64
 
@@ -64,25 +66,38 @@ mutable struct UKF
 end
 
 function UKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim; 
-    α = 1.0, β = 2.0, κ = 1.0, lunaPerts = false, steps2save = 5, resample = false)
+    α = 1.0, β = 2.0, κ = 1.0, lunaPerts = false, resample = false)
 
     # Instantiate preallocated matricies
     ixp     = 1
     rs      = zeros(length(ts), 35)
-    txp     = zeros((steps2save + 1)*length(ts) + 1); txp[1] = scSim.t0
-    xhats   = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :] .= xhat0
-    es      = zeros((steps2save + 1)*length(ts) + 1, 7);
-    Ps      = zeros((steps2save + 1)*length(ts) + 1, 7); Ps[1, :] .= diag(P0)
-    χ       = zeros(7,15)
-    χd      = zeros(7,15)
+    txp     = zeros(2*length(ts) + 1); txp[1] = scSim.t0
+    xhats   = zeros(2*length(ts) + 1, 7); xhats[1, :] .= xhat0
+    es      = zeros(2*length(ts) + 1, 7);
+    Ps      = zeros(2*length(ts) + 1, 7); Ps[1, :] .= diag(P0)
+    χ       = zeros(14,29)
+    χd      = zeros(7,29)
     P⁻      = zeros(7,7)
     P⁺      = deepcopy(P0) 
     Py      = zeros(35, 35)
     Pyt     = zeros(35, 35)
     Pxy     = zeros(7, 35)
-    expmeas = zeros(35, 15)
-    expmeasd= zeros(35, 15)
+    expmeas = zeros(35, 29)
+    expmeasd= zeros(35, 29)
     yhat    = zeros(35)
+    L       = 14
+
+    # Construct sparse augmented covariance
+    Pa      = sparse(zeros(14,14))
+    for c in 1:7
+        for r in 1:7
+            Pa[r,c]     = P⁺[r,c]
+            if c == r
+                Pa[7 + r,7 + c]     = Q[r,c]
+            end
+        end
+    end
+    C       = cholesky(Pa; perm = 1:14)
    
     # Compute IMU Δt from ts vector 
     imuΔt   = ts[2] - ts[1]
@@ -92,12 +107,12 @@ function UKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim;
     @views es[1,:] .= xhat0 .- ytrue[1:7]
 
     # Compute gamma 
-    λ       = α^2*(7.0 + κ) - 7.0
-    γ       = sqrt(7.0 + λ)
+    λ       = α^2*(L + κ) - L
+    γ       = sqrt(L + λ)
 
     # Instantiate UKF
-    UKF(ts,imuΔt,gpsΔt,rs,txp,ixp,xhats,es,Ps,α,β,κ,λ,γ,χ,χd,P⁺,P⁻,Py,Pyt,Pxy,Q,expmeas,expmeasd,yhat,
-        gpsSim,imuSim,scSim,σ2GPS,σ2Acc,steps2save,0,true,false,lunaPerts,resample)
+    UKF(ts,imuΔt,gpsΔt,rs,txp,ixp,xhats,es,Ps,α,β,κ,λ,γ,L,χ,χd,Pa,C,P⁺,P⁻,Py,Pyt,Pxy,Q,expmeas,expmeasd,yhat,
+        gpsSim,imuSim,scSim,σ2GPS,σ2Acc,0,true,false,lunaPerts,resample)
 end
 
 function propagate!(ukf::UKF)
@@ -118,72 +133,67 @@ function propagate!(ukf::UKF)
     end
 
     # Generate vector of times to save at 
-    saveat  = range(t0; length = ukf.stp, stop = tf)
+    saveat  = range(t0; length = Int(floor(tf - t0)), stop = tf)
 
     # Compute sigma points
-    C       = cholesky(ukf.P⁺)
-    for i in 1:7
-        @views ukf.χ[:,2*i - 1] .= ukf.xhats[ukf.ixp, :] .+ ukf.γ.*C.L[:,i]
-        @views ukf.χ[:,2*i]     .= ukf.xhats[ukf.ixp, :] .- ukf.γ.*C.L[:,i]
+    #C       = cholesky(ukf.P⁺)
+    cholesky!(ukf.C, ukf.Pa)
+    L       = sparse(ukf.C.L)
+    ukf.χ   .= 0.0
+    for i in 1:ukf.L
+        @views ukf.χ[1:7,2*i - 1]   .= ukf.xhats[ukf.ixp, :] .+ ukf.γ.*L[1:7,i]
+        @views ukf.χ[8:14,2*i - 1]  .= ukf.γ.*L[8:14,i]
+        @views ukf.χ[1:7,2*i]       .= ukf.xhats[ukf.ixp, :] .- ukf.γ.*L[1:7,i]
+        @views ukf.χ[8:14,2*i]      .= -ukf.γ.*L[8:14,i]
     end
-    ukf.χ[:,15] .= ukf.xhats[ukf.ixp, :]
+    ukf.χ[1:7,2*ukf.L + 1] .= ukf.xhats[ukf.ixp, :]
 
     # Propagate sigma points 
     if ukf.lunaPerts == false
-        @views sols = [solve(ODEProblem(ukfNoLunarPertEOM, SVector{7}(ukf.χ[:,i]), (t0, tf), ukf), 
-            Vern7(); reltol=1e-10, abstol=1e-10, saveat=saveat) for i in 1:15]
+        @views sols = [rkProp(ukfNoLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
     else
-        @views sols = [solve(ODEProblem(ukfWithLunarPertEOM, SVector{7}(ukf.χ[:,i]), (t0, tf), ukf), 
-            Vern7(); reltol=1e-10, abstol=1e-10, saveat=saveat) for i in 1:15]
+        @views sols = [rkProp(ukfWithLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
     end
 
     # Update storage matricies
-    start   = ukf.ixp + 1
-    stop    = ukf.ixp + ukf.stp 
-    step    = 0
-    for i in start:stop
-        step += 1
+    ukf.ixp += 1
 
-        # Time 
-        ukf.txp[i] = sols[1].t[step]
+    # Time 
+    ukf.txp[ukf.ixp] = tf
 
-        # Fill matrix of sigma point states at step "step"
-        for j in 1:15
-            for k in 1:7
-                ukf.χ[k,j] = sols[j].u[step][k]
-            end
+    # Fill matrix of sigma point states 
+    for j in 1:2*ukf.L + 1
+        for k in 1:7
+            ukf.χ[k,j] = sols[j][k]
         end
-
-        # Compute weights
-        w0m     = ukf.λ / (7.0 + ukf.λ)
-        w0c     = w0m + (1 - ukf.α^2 + ukf.β)
-        wi      = 1.0 / (2.0*(7 + ukf.λ))
-
-        # State estimate
-        ukf.xhats[i,:] .*= 0.0
-        for j in 1:14
-            @views ukf.xhats[i,:] .+= wi.*ukf.χ[:,j]
-        end
-        @views ukf.xhats[i,:] .+= w0m.*ukf.χ[:,15]
-
-        # Error 
-        (ytrue, u) = GetStateAndControl(ukf.scSim, ukf.txp[i])
-        @views ukf.es[i,:] .= ukf.xhats[i,:] .- ytrue[1:7]
-
-        # Covariance
-        ukf.P⁻ .*= 0.0
-        for j in 1:14
-            @views ukf.χd[:,j] .= ukf.χ[:,j] .- ukf.xhats[i,:]
-            @views mul!(ukf.P⁺, ukf.χd[:,j], transpose(ukf.χd[:,j])) # Using P⁺ for storage of data
-            ukf.P⁻ .+= wi.*ukf.P⁺
-        end
-        @views ukf.χd[:,15] .= ukf.χ[:,15] .- ukf.xhats[i,:]
-        @views mul!(ukf.P⁺, ukf.χd[:,15], transpose(ukf.χd[:,15]))
-        ukf.P⁻ .+= w0c.*ukf.P⁺
-
-        @views ukf.Ps[i,:] .= diag(ukf.P⁻)
-        ukf.ixp = i
     end
+
+    # Compute weights
+    w0m     = ukf.λ / (ukf.L + ukf.λ)
+    w0c     = w0m + (1 - ukf.α^2 + ukf.β)
+    wi      = 1.0 / (2.0*(ukf.L + ukf.λ))
+
+    # State estimate
+    ukf.xhats[ukf.ixp,:] .*= 0.0
+    for j in 1:2*ukf.L
+        @views ukf.xhats[ukf.ixp,:] .+= wi.*ukf.χ[1:7,j]
+    end
+    @views ukf.xhats[ukf.ixp,:] .+= w0m.*ukf.χ[1:7,2*ukf.L + 1]
+
+    # Error 
+    (ytrue, u) = GetStateAndControl(ukf.scSim, tf)
+    @views ukf.es[ukf.ixp,:] .= ukf.xhats[ukf.ixp,:] .- ytrue[1:7]
+
+    # Covariance
+    ukf.P⁻ .*= 0.0
+    for j in 1:2*ukf.L
+        @views ukf.χd[:,j] .= ukf.χ[1:7,j] .- ukf.xhats[ukf.ixp,:]
+        @views mul!(ukf.P⁻, ukf.χd[:,j], transpose(ukf.χd[:,j]), wi, 1.0) # Using P⁺ for storage of data
+    end
+    @views ukf.χd[:,2*ukf.L + 1] .= ukf.χ[1:7,2*ukf.L + 1] .- ukf.xhats[ukf.ixp,:]
+    @views mul!(ukf.P⁻, ukf.χd[:,2*ukf.L + 1], transpose(ukf.χd[:,2*ukf.L + 1]), w0c, 1.0)
+
+    @views ukf.Ps[ukf.ixp,:] .= diag(ukf.P⁻)
 end
 
 function updateGPS!(ukf::UKF)
@@ -329,7 +339,49 @@ function runFilter!(ukf::UKF)
     end
 end
 
-function ukfNoLunarPertEOM(y, ukf::UKF, t)
+function rkProp(f, x0, ts, ukf::UKF)
+    h   = ts[2] - ts[1]
+    χw  = view(x0, 8:14)
+    xin = @SVector [x0[1], x0[2], x0[3], x0[4], x0[5], x0[6], x0[7]]
+    for i in 1:length(ts) - 1
+        xi1 = @SVector [xin[1], xin[2], xin[3], xin[4], xin[5], xin[6], xin[7]]
+        k1  = f(xi1, ukf, ts[i], χw)
+        xi2 = @SVector [xi1[1] + 0.5*h*k1[1],
+                        xi1[2] + 0.5*h*k1[2],
+                        xi1[3] + 0.5*h*k1[3],
+                        xi1[4] + 0.5*h*k1[4],
+                        xi1[5] + 0.5*h*k1[5],
+                        xi1[6] + 0.5*h*k1[6],
+                        xi1[7] + 0.5*h*k1[7]]
+        k2  = f(xi2, ukf, ts[i] + 0.5*h, χw)
+        xi3 = @SVector [xi1[1] + 0.5*h*k2[1],
+                        xi1[2] + 0.5*h*k2[2],
+                        xi1[3] + 0.5*h*k2[3],
+                        xi1[4] + 0.5*h*k2[4],
+                        xi1[5] + 0.5*h*k2[5],
+                        xi1[6] + 0.5*h*k2[6],
+                        xi1[7] + 0.5*h*k2[7]]
+        k3  = f(xi3, ukf, ts[i] + 0.5*h, χw)
+        xi4 = @SVector [xi1[1] + h*k3[1],
+                        xi1[2] + h*k3[2],
+                        xi1[3] + h*k3[3],
+                        xi1[4] + h*k3[4],
+                        xi1[5] + h*k3[5],
+                        xi1[6] + h*k3[6],
+                        xi1[7] + h*k3[7]]
+        k4  = f(xi4, ukf, ts[i] + h, χw)
+        xin = @SVector [xi1[1] + h*(k1[1] + k2[1] + k3[1] + k4[1])/6.0,
+                        xi1[2] + h*(k1[2] + k2[2] + k3[2] + k4[2])/6.0,
+                        xi1[3] + h*(k1[3] + k2[3] + k3[3] + k4[3])/6.0,
+                        xi1[4] + h*(k1[4] + k2[4] + k3[4] + k4[4])/6.0,
+                        xi1[5] + h*(k1[5] + k2[5] + k3[5] + k4[5])/6.0,
+                        xi1[6] + h*(k1[6] + k2[6] + k3[6] + k4[6])/6.0,
+                        xi1[7] + h*(k1[7] + k2[7] + k3[7] + k4[7])/6.0]
+    end
+    return xin
+end
+
+function ukfNoLunarPertEOM(y, ukf::UKF, t, χw)
     # Earth gravitational parameter
     μ = 3.986004418e5 # [km^3/s^2]
 
@@ -339,20 +391,29 @@ function ukfNoLunarPertEOM(y, ukf::UKF, t)
     # Get control
     u = GetControl(ukf.scSim, t)
 
+    # Get process noise
+    w = @SVector [χw[1]*randn(),
+                  χw[2]*randn(),
+                  χw[3]*randn(),
+                  χw[4]*randn(),
+                  χw[5]*randn(),
+                  χw[6]*randn(),
+                  χw[7]*randn()]
+
     # States
     @views r    = norm(y[1:3])
     nμr3        = -μ/r^3
     at          = T*u[1] / y[7] 
-    dy          = @SVector [y[4], y[5], y[6], 
-                            nμr3*y[1] + at*u[2],
-                            nμr3*y[2] + at*u[3],
-                            nμr3*y[3] + at*u[4],
-                            -u[1]*T / ukf.scSim.ps.sp.c]
+    dy          = @SVector [y[4] + w[1], y[5] + w[2], y[6] + w[3], 
+                            nμr3*y[1] + at*u[2] + w[4],
+                            nμr3*y[2] + at*u[3] + w[5],
+                            nμr3*y[3] + at*u[4] + w[6],
+                            -u[1]*T / ukf.scSim.ps.sp.c + w[7]]
                             
     return dy
 end
 
-function ukfWithLunarPertEOM(y, ukf::UKF, t)
+function ukfWithLunarPertEOM(y, ukf::UKF, t, χw)
     # Earth gravitational parameter
     μ = 5.9742e24*6.673e-20
 
@@ -365,6 +426,15 @@ function ukfWithLunarPertEOM(y, ukf::UKF, t)
     # Get control
     (u, rLuna) = GetControlAndLunaPos(ukf.scSim, t)
 
+    # Get process noise
+    w = @SVector [χw[1]*randn(),
+                  χw[2]*randn(),
+                  χw[3]*randn(),
+                  χw[4]*randn(),
+                  χw[5]*randn(),
+                  χw[6]*randn(),
+                  χw[7]*randn()]
+
     # Luna gravitational perturbation
     rls         = @SVector [rLuna[1] - y[1], rLuna[2] - y[2], rLuna[3] - y[3]]
     μldRls3     = μl / (norm(rls)^3)
@@ -376,11 +446,11 @@ function ukfWithLunarPertEOM(y, ukf::UKF, t)
     @views r    = norm(y[1:3])
     nμr3        = -μ/r^3
     at          = T*u[1] / y[7] 
-    dy          = @SVector [y[4], y[5], y[6], 
-                            nμr3*y[1] + al[1] + at*u[2],
-                            nμr3*y[2] + al[2] + at*u[3],
-                            nμr3*y[3] + al[3] + at*u[4],
-                            -u[1]*T / ukf.scSim.ps.sp.c]
+    dy          = @SVector [y[4] + w[1], y[5] + w[2], y[6] + w[3], 
+                            nμr3*y[1] + al[1] + at*u[2] + w[4],
+                            nμr3*y[2] + al[2] + at*u[3] + w[5],
+                            nμr3*y[3] + al[3] + at*u[4] + w[6],
+                            -u[1]*T / ukf.scSim.ps.sp.c + w[7]]
     
     return dy
 end
