@@ -58,7 +58,7 @@ function EKF(xhat0, P0, Q, σ2GPS, σ2Acc, ts, gpsΔt, gpsSim, imuSim, scSim; lu
     rs      = zeros(length(ts), 32 + 3)
     txp     = zeros((steps2save + 1)*length(ts) + 1); txp[1] = scSim.t0
     xhats   = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :] .= xhat0
-    es      = zeros((steps2save + 1)*length(ts) + 1, 7); xhats[1, :]
+    es      = zeros((steps2save + 1)*length(ts) + 1, 7);
     Ps      = zeros((steps2save + 1)*length(ts) + 1, 7); Ps[1, :] .= diag(P0)
     P⁻      = zeros(7,7)
     P⁺      = deepcopy(P0)
@@ -178,10 +178,10 @@ function updateGPS!(ekf::EKF)
 
     # Compute residuals and measurement partials
     numRejected = 0
-    rejectTol   = 1e3
+    rejectTol   = 10.0
     for i in 1:numSats
         r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
-        if r < rejectTol
+        if abs(r) < rejectTol
             # Compute residual while catching bad measurements
             @views ekf.rs[ekf.k, i - numRejected] = r
 
@@ -317,10 +317,10 @@ function updateGPSIMU!(ekf::EKF)
 
     # Compute residuals and measurement partials
     numRejected = 0
-    rejectTol   = 1e3
+    rejectTol   = 10.0
     for i in 1:numSats
         r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
-        if r < rejectTol
+        if abs(r) < rejectTol
             # Compute residual while catching bad measurements
             @views ekf.rs[ekf.k, i - numRejected] = r
 
@@ -499,7 +499,7 @@ function ekfWithLunarPertEOM!(dy, y, ekf::EKF, t)
     dP .+= ekf.Q
 end
 
-function plotEKF(ekf::EKF, xtrue, n)
+function plot(ekf::EKF, xtrue, n)
         ts   = ekf.txp[1:n]
         xhat = ekf.xhats[1:n, :]
         xt   = xtrue[1:n, :]
