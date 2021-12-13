@@ -29,8 +29,7 @@ ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*8640
 σa      = 1.0e-6  # [km/s^2] Accelerometer noise standard deviation 
 
 # Process noise covariance
-R       = Diagonal((σρ^2 + 3*σr^2)*ones(32)) 
-Q       = Diagonal([1.0e-14, 1.0e-14, 1.0e-14, 1.0e-10, 1.0e-10, 1.0e-10, 1.0e-3])
+Q       = Diagonal([1.0e-14, 1.0e-14, 1.0e-14, 1.0e-10, 1.0e-10, 1.0e-10, 5.0e-4])
 
 # GPS Simulation Span
 startWeek   = 2170
