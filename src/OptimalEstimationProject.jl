@@ -56,6 +56,6 @@ export EKF
 export UKF
 export runFilter!
 export plotGPS
-export plotEKF
+export plot
 
 end

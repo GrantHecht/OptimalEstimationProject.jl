@@ -59,7 +59,7 @@ function main()
     end
 
     # Plotting
-    plotEKF(ekf, xtrue, length(ekf.txp))
+    plot(ekf, xtrue, length(ekf.txp))
 end
 
 main()

@@ -178,10 +178,10 @@ function updateGPS!(ekf::EKF)
 
     # Compute residuals and measurement partials
     numRejected = 0
-    rejectTol   = 1e3
+    rejectTol   = 10.0
     for i in 1:numSats
         r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
-        if r < rejectTol
+        if abs(r) < rejectTol
             # Compute residual while catching bad measurements
             @views ekf.rs[ekf.k, i - numRejected] = r
 
@@ -317,10 +317,10 @@ function updateGPSIMU!(ekf::EKF)
 
     # Compute residuals and measurement partials
     numRejected = 0
-    rejectTol   = 1e3
+    rejectTol   = 10.0
     for i in 1:numSats
         r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
-        if r < rejectTol
+        if abs(r) < rejectTol
             # Compute residual while catching bad measurements
             @views ekf.rs[ekf.k, i - numRejected] = r
 
@@ -499,7 +499,7 @@ function ekfWithLunarPertEOM!(dy, y, ekf::EKF, t)
     dP .+= ekf.Q
 end
 
-function plotEKF(ekf::EKF, xtrue, n)
+function plot(ekf::EKF, xtrue, n)
         ts   = ekf.txp[1:n]
         xhat = ekf.xhats[1:n, :]
         xt   = xtrue[1:n, :]
