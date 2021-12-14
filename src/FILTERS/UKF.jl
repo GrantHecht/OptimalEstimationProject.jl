@@ -132,13 +132,12 @@ function propagate!(ukf::UKF)
     end
 
     # Generate vector of times to save at 
-    saveat  = range(t0; length = Int(floor(tf - t0)), stop = tf)
+    saveat = range(t0; length = 2, stop = tf)
 
     # Compute sigma points
-    #C       = cholesky(ukf.P⁺)
     cholesky!(ukf.C, ukf.Pa)
     L       = sparse(ukf.C.L)
-    ukf.χ   .= 0.0
+    ukf.χ  .= 0.0
     for i in 1:ukf.L
         @views ukf.χ[1:7,2*i - 1]   .= ukf.xhats[ukf.ixp, :] .+ ukf.γ.*L[1:7,i]
         @views ukf.χ[8:14,2*i - 1]  .= ukf.γ.*L[8:14,i]
@@ -149,9 +148,17 @@ function propagate!(ukf::UKF)
 
     # Propagate sigma points 
     if ukf.lunaPerts == false
-        @views sols = [rkProp(ukfNoLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
+        #@views sols = [rkProp(ukfNoLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
+        @views sols = [solve(
+            ODEProblem{false}((u,p,t)->ukfNoLunarPertEOM(u,p,t,ukf.χ[8:14,i]), 
+            SVector{7}(ukf.χ[1:7,i]), (t0, tf), ukf), Vern7();
+            reltol=1e-10, abstol=1e-10, saveat=saveat) for i in 1:2*ukf.L + 1]
     else
-        @views sols = [rkProp(ukfWithLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
+        #@views sols = [rkProp(ukfWithLunarPertEOM, ukf.χ[:,i], saveat, ukf) for i in 1:2*ukf.L + 1]
+        @views sols = [solve(
+            ODEProblem{false}((u,p,t)->ukfWithLunarPertEOM(u,p,t,ukf.χ[8:14,i]), 
+            SVector{7}(ukf.χ[1:7,i]), (t0, tf), ukf), Vern7();
+            reltol=1e-10, abstol=1e-10, saveat=saveat) for i in 1:2*ukf.L + 1]
     end
 
     # Update storage matricies
@@ -163,7 +170,7 @@ function propagate!(ukf::UKF)
     # Fill matrix of sigma point states 
     for j in 1:2*ukf.L + 1
         for k in 1:7
-            ukf.χ[k,j] = sols[j][k]
+            ukf.χ[k,j] = sols[j].u[end][k]
         end
     end
 
@@ -499,7 +506,7 @@ function updateGPSIMU!(ukf::UKF)
 
     # Compute residuals with GPS pseudorange measurement rejection
     accMeas     = Vector{Bool}(undef, 35); accMeas .= false
-    rejectTol   = 10.0
+    rejectTol   = 5.0
     numRejected = 0
     for i in 1:numSats 
         r = measGPS[3 + 2*(i - 1)] - ukf.yhat[i]
@@ -646,15 +653,6 @@ function ukfNoLunarPertEOM(y, ukf::UKF, t, χw)
     # Get control
     u = GetControl(ukf.scSim, t)
 
-    # Get process noise
-    w = @SVector [χw[1]*randn(),
-                  χw[2]*randn(),
-                  χw[3]*randn(),
-                  χw[4]*randn(),
-                  χw[5]*randn(),
-                  χw[6]*randn(),
-                  χw[7]*randn()]
-
     # States
     @views r    = norm(y[1:3])
     nμr3        = -μ/r^3
@@ -680,15 +678,6 @@ function ukfWithLunarPertEOM(y, ukf::UKF, t, χw)
 
     # Get control
     (u, rLuna) = GetControlAndLunaPos(ukf.scSim, t)
-
-    # Get process noise
-    w = @SVector [χw[1]*randn(),
-                  χw[2]*randn(),
-                  χw[3]*randn(),
-                  χw[4]*randn(),
-                  χw[5]*randn(),
-                  χw[6]*randn(),
-                  χw[7]*randn()]
 
     # Luna gravitational perturbation
     rls         = @SVector [rLuna[1] - y[1], rLuna[2] - y[2], rLuna[3] - y[3]]

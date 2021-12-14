@@ -29,7 +29,7 @@ ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*8640
 σa      = 1.0e-6  # [km/s^2] Accelerometer noise standard deviation 
 
 # Process noise covariance
-Q       = Diagonal([1.0e-14, 1.0e-14, 1.0e-14, 1.0e-10, 1.0e-10, 1.0e-10, 5.0e-4])
+Q       = Diagonal([1.0e-16, 1.0e-16, 1.0e-16, 1.0e-12, 1.0e-12, 1.0e-12, 1.0e-3])
 
 # GPS Simulation Span
 startWeek   = 2170
@@ -48,8 +48,8 @@ ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, s
     lunaPerts = true, α = 1.0, β = 0.0, κ = 3.0+14.0);
 ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 2, lunaPerts = true);
 
-runFilter!(ukf)
-#runFilter!(ekf)
+@time runFilter!(ukf)
+@time runFilter!(ekf)
 
 # Get true trajectory for plotting
 xtrue = zeros(length(ukf.txp), 3)
