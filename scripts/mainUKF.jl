@@ -46,10 +46,8 @@ imusim = IMUSim(σa)
 # Create EKF
 ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; 
     lunaPerts = true, α = 1.0, β = 0.0, κ = 3.0+14.0);
-ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, scsim; steps2save = 2, lunaPerts = true);
 
 @time runFilter!(ukf)
-@time runFilter!(ekf)
 
 # Get true trajectory for plotting
 xtrue = zeros(length(ukf.txp), 3)
