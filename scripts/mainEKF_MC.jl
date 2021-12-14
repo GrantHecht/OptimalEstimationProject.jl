@@ -6,7 +6,7 @@ using DataFrames
 using CSV
 
 # Number of trials
-nTrials = 10
+nTrials = 100
 
 function main(nTrials)
     # Spacecraft simulator
