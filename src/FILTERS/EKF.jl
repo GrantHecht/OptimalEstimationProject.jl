@@ -317,7 +317,7 @@ function updateGPSIMU!(ekf::EKF)
 
     # Compute residuals and measurement partials
     numRejected = 0
-    rejectTol   = 10.0
+    rejectTol   = 1.0
     for i in 1:numSats
         r = measGPS[3 + 2*(i - 1)] - expMeasGPS[3 + 2*(i - 1)]
         if abs(r) < rejectTol

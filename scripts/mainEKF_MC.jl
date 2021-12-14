@@ -29,12 +29,12 @@ function main(nTrials)
     ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*86400)
 
     # Measurement statistics
-    σρ      = 1.0e-3 # [km]     Pseudorange noise standard deviation
+    σρ      = 10.0e-3 # [km]     Pseudorange noise standard deviation
     σr      = 5.0e-3 # [km]     GPS broadcast ephemeris standard deviation
-    σa      = 1.0e-5 # [km/s^2] Accelerometer noise standard deviation 
+    σa      = 1.0e-6 # [km/s^2] Accelerometer noise standard deviation 
 
     # Process noise covariance
-    Q       = Diagonal([0.0, 0.0, 0.0, 1e-10, 1e-10, 1e-10, 5e-4])
+    Q       = Diagonal([0.0, 0.0, 0.0, 1e-12, 1e-12, 1e-12, 1e-3])
 
     # GPS Simulation Span
     startWeek   = 2170
