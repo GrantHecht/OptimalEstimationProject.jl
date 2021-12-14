@@ -59,13 +59,3 @@ end
 # Plotting
 plot(ukf, xtrue, length(ukf.txp))
 
-#mat"""
-#figure()
-#plot($(ukf.txp[1:ukf.ixp]),     $(ukf.es[1:ukf.ixp,1]), "r")
-#hold on
-#plot($(ukf.txp[1:ukf.ixp]),     3*sqrt($(ukf.Ps[1:ukf.ixp,1])), "k")
-#plot($(ukf.txp[1:ukf.ixp]),     -3*sqrt($(ukf.Ps[1:ukf.ixp,1])), "k")
-#plot($(ekf.txp[1:ekf.ixp]),     $(ekf.es[1:ekf.ixp,1]), "--r")
-#plot($(ekf.txp[1:ekf.ixp]),     3*sqrt($(ekf.Ps[1:ekf.ixp,1])), "--k")
-#plot($(ekf.txp[1:ekf.ixp]),     -3*sqrt($(ekf.Ps[1:ekf.ixp,1])), "--k")
-#"""
