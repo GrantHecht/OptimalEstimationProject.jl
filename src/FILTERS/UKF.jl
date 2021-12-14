@@ -506,7 +506,7 @@ function updateGPSIMU!(ukf::UKF)
 
     # Compute residuals with GPS pseudorange measurement rejection
     accMeas     = Vector{Bool}(undef, 35); accMeas .= false
-    rejectTol   = 5.0
+    rejectTol   = 1.0
     numRejected = 0
     for i in 1:numSats 
         r = measGPS[3 + 2*(i - 1)] - ukf.yhat[i]
