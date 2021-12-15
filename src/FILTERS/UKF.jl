@@ -700,86 +700,191 @@ function ukfWithLunarPertEOM(y, ukf::UKF, t, χw)
 end
 
 function plot(ukf::UKF, xtrue, n)
-        ts   = ukf.txp[1:n]
-        xhat = ukf.xhats[1:n, :]
-        xt   = xtrue[1:n, :]
-        es   = ukf.es[1:n, :]
-        σ311 = 3*sqrt.(ukf.Ps[1:n,1])
-        σ322 = 3*sqrt.(ukf.Ps[1:n,2])
-        σ333 = 3*sqrt.(ukf.Ps[1:n,3])
-        σ344 = 3*sqrt.(ukf.Ps[1:n,4])
-        σ355 = 3*sqrt.(ukf.Ps[1:n,5])
-        σ366 = 3*sqrt.(ukf.Ps[1:n,6])
-        σ377 = 3*sqrt.(ukf.Ps[1:n,7])
+    ts   = ukf.txp[1:n]
+    xhat = ukf.xhats[1:n, :]
+    xt   = xtrue[1:n, :]
+    es   = ukf.es[1:n, :]
+    σ311 = 3*sqrt.(ukf.Ps[1:n,1])
+    σ322 = 3*sqrt.(ukf.Ps[1:n,2])
+    σ333 = 3*sqrt.(ukf.Ps[1:n,3])
+    σ344 = 3*sqrt.(ukf.Ps[1:n,4])
+    σ355 = 3*sqrt.(ukf.Ps[1:n,5])
+    σ366 = 3*sqrt.(ukf.Ps[1:n,6])
+    σ377 = 3*sqrt.(ukf.Ps[1:n,7])
 
-        mat"""
-        ts      = $ts;
-        ts      = (ts - $(ukf.scSim.t0))/86400;
-        xhat    = $xhat;
-        xt      = $xt;
-        es      = $es;
-        s311    = $σ311;
-        s322    = $σ322;
-        s333    = $σ333;
-        s344    = $σ344;
-        s355    = $σ355;
-        s366    = $σ366;
-        s377    = $σ377;
+    mat"""
+    ts      = $ts;
+    ts      = (ts - $(ukf.scSim.t0))/86400;
+    xhat    = $xhat;
+    xt      = $xt;
+    es      = $es;
+    s311    = $σ311;
+    s322    = $σ322;
+    s333    = $σ333;
+    s344    = $σ344;
+    s355    = $σ355;
+    s366    = $σ366;
+    s377    = $σ377;
 
-        figure()
-        subplot(3,1,1)
-        plot(ts, es(:,1), 'k')
-        hold on
-        plot(ts, s311, 'r')
-        plot(ts, -s311, 'r')
-        legend('Estimation Error', 'UKF \$3\\sigma\$', 'Interpreter', 'latex')
-        grid on
+    figure()
+    subplot(3,1,1)
+    plot(ts, es(:,1), 'k')
+    hold on
+    plot(ts, s311, 'r')
+    plot(ts, -s311, 'r')
+    legend('Estimation Error', 'UKF \$3\\sigma\$', 'Interpreter', 'latex')
+    grid on
 
-        subplot(3,1,2)
-        plot(ts, es(:,1), 'k')
-        hold on
-        plot(ts, s322, 'r')
-        plot(ts, -s322, 'r')
-        grid on
+    subplot(3,1,2)
+    plot(ts, es(:,1), 'k')
+    hold on
+    plot(ts, s322, 'r')
+    plot(ts, -s322, 'r')
+    grid on
 
-        subplot(3,1,3)
-        plot(ts, es(:,3), 'k')
-        hold on
-        plot(ts, s333, 'r')
-        plot(ts, -s333, 'r')
-        xlabel("Time, days")
-        grid on
+    subplot(3,1,3)
+    plot(ts, es(:,3), 'k')
+    hold on
+    plot(ts, s333, 'r')
+    plot(ts, -s333, 'r')
+    xlabel("Time, days")
+    grid on
 
-        figure()
-        subplot(3,1,1)
-        plot(ts, es(:,4), 'k')
-        hold on
-        plot(ts, s344, 'r')
-        plot(ts, -s344, 'r')
+    figure()
+    subplot(3,1,1)
+    plot(ts, es(:,4), 'k')
+    hold on
+    plot(ts, s344, 'r')
+    plot(ts, -s344, 'r')
 
-        subplot(3,1,2)
-        plot(ts, es(:,5), 'k')
-        hold on
-        plot(ts, s355, 'r')
-        plot(ts, -s355, 'r')
+    subplot(3,1,2)
+    plot(ts, es(:,5), 'k')
+    hold on
+    plot(ts, s355, 'r')
+    plot(ts, -s355, 'r')
 
-        subplot(3,1,3)
-        plot(ts, es(:,6), 'k')
-        hold on
-        plot(ts, s366, 'r')
-        plot(ts, -s366, 'r')
+    subplot(3,1,3)
+    plot(ts, es(:,6), 'k')
+    hold on
+    plot(ts, s366, 'r')
+    plot(ts, -s366, 'r')
 
-        figure()
-        plot(ts, es(:,7), 'k')
-        hold on
-        plot(ts, s377, 'r')
-        plot(ts, -s377, 'r')
+    figure()
+    plot(ts, es(:,7), 'k')
+    hold on
+    plot(ts, s377, 'r')
+    plot(ts, -s377, 'r')
 
-        figure()
-        plot3(xhat(:,1),xhat(:,2), xhat(:,3), 'r')
-        hold on
-        plot3(xt(:,1),xt(:,2),xt(:,3), 'b')
-        grid on
-        axis equal
-        """
-    end
+    figure()
+    plot3(xhat(:,1),xhat(:,2), xhat(:,3), 'r')
+    hold on
+    plot3(xt(:,1),xt(:,2),xt(:,3), 'b')
+    grid on
+    axis equal
+    """
+end
+
+function plotMC(ukf::UKF, em, ev, n)
+    ts      = ukf.txp[1:n]
+    xhat    = ukf.xhats[1:n, :]
+    es      = ukf.es[1:n, :]
+    σ311    = 3*sqrt.(ukf.Ps[1:n,1])
+    σ311mc  = 3*sqrt.(ev[:,1])
+    σ322    = 3*sqrt.(ukf.Ps[1:n,2])
+    σ322mc  = 3*sqrt.(ev[:,2])
+    σ333    = 3*sqrt.(ukf.Ps[1:n,3])
+    σ333mc  = 3*sqrt.(ev[:,3])
+    σ344    = 3*sqrt.(ukf.Ps[1:n,4])
+    σ344mc  = 3*sqrt.(ev[:,4])
+    σ355    = 3*sqrt.(ukf.Ps[1:n,5])
+    σ355mc  = 3*sqrt.(ev[:,5])
+    σ366    = 3*sqrt.(ukf.Ps[1:n,6])
+    σ366mc  = 3*sqrt.(ev[:,6])
+    σ377    = 3*sqrt.(ukf.Ps[1:n,7])
+    σ377mc  = 3*sqrt.(ev[:,7])
+
+    mat"""
+    ts      = $ts;
+    ts      = (ts - $(ukf.scSim.t0))/86400;
+    xhat    = $xhat;
+    es      = $es;
+    s311    = $σ311;
+    s311mc  = $σ311mc;
+    s322    = $σ322;
+    s322mc  = $σ322mc;
+    s333    = $σ333;
+    s333mc  = $σ333mc;
+    s344    = $σ344;
+    s344mc  = $σ344mc;
+    s355    = $σ355;
+    s355mc  = $σ355mc;
+    s366    = $σ366;
+    s366mc  = $σ366mc;
+    s377    = $σ377;
+    s377mc  = $σ377mc;
+
+    figure()
+    subplot(3,1,1)
+    plot(ts, es(:,1), 'k')
+    hold on
+    plot(ts, s311, 'r')
+    plot(ts, -s311, 'r')
+    plot(ts, s311mc, '--r')
+    plot(ts, -s311mc, '--r')
+    legend('Estimation Error', 'UKF \$3\\sigma\$', 'Interpreter', 'latex')
+    grid on
+
+    subplot(3,1,2)
+    plot(ts, es(:,1), 'k')
+    hold on
+    plot(ts, s322, 'r')
+    plot(ts, -s322, 'r')
+    plot(ts, s322mc, '--r')
+    plot(ts, -s322mc, '--r')
+    grid on
+
+    subplot(3,1,3)
+    plot(ts, es(:,3), 'k')
+    hold on
+    plot(ts, s333, 'r')
+    plot(ts, -s333, 'r')
+    plot(ts, s333mc, '--r')
+    plot(ts, -s333mc, '--r')
+    xlabel("Time, days")
+    grid on
+
+    figure()
+    subplot(3,1,1)
+    plot(ts, es(:,4), 'k')
+    hold on
+    plot(ts, s344, 'r')
+    plot(ts, -s344, 'r')
+    plot(ts, s344mc, '--r')
+    plot(ts, -s344mc, '--r')
+
+    subplot(3,1,2)
+    plot(ts, es(:,5), 'k')
+    hold on
+    plot(ts, s355, 'r')
+    plot(ts, -s355, 'r')
+    plot(ts, s355mc, '--r')
+    plot(ts, -s355mc, '--r')
+
+    subplot(3,1,3)
+    plot(ts, es(:,6), 'k')
+    hold on
+    plot(ts, s366, 'r')
+    plot(ts, -s366, 'r')
+    plot(ts, s366mc, '--r')
+    plot(ts, -s366mc, '--r')
+
+    figure()
+    plot(ts, es(:,7), 'k')
+    hold on
+    plot(ts, s377, 'r')
+    plot(ts, -s377, 'r')
+    plot(ts, s377mc, '--r')
+    plot(ts, -s377mc, '--r')
+
+    """
+end

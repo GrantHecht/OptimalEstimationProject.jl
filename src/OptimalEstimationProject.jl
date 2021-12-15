@@ -19,9 +19,10 @@ using AstroTime; AstroTime.update()
 using EarthOrientation
 using MATLAB
 
-# Linear Algebra Utilities
+# Utilities
 #using LoopVectorization # Using BLAS routines rather than pure Julian linear algebra 
 #include("UTILS/vecOuterProd.jl")
+include("UTILS/computeMCStats.jl")
 
 # Time Utilities
 include("TIME/gps2MJD.jl")
@@ -57,5 +58,6 @@ export UKF
 export runFilter!
 export plotGPS
 export plot
+export plotMC
 
 end
