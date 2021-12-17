@@ -59,5 +59,5 @@ ekf = EKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, s
 # Run filter
 runFilter!(ekf)
 
-# ===== MC Plots
-plotMC(ekf, em, ev, length(ekf.txp))
+# ===== Save MC plotting data
+saveMCmat(ekf, em, ev, length(ekf.txp))

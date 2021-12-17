@@ -59,5 +59,6 @@ export runFilter!
 export plotGPS
 export plot
 export plotMC
+export saveMCmat
 
 end

@@ -38,7 +38,7 @@ ts      = range(t0.second + Δt; step = Δt, stop = t0.second + scsim.ts[2]*8640
 σa      = 1.0e-6  # [km/s^2] Accelerometer noise standard deviation 
 
 # Process noise covariance
-Q       = Diagonal([1.0e-18, 1.0e-18, 1.0e-18, 1.0e-12, 1.0e-12, 1.0e-12, 5.0e-3])
+Q       = Diagonal([1.0e-16, 1.0e-16, 1.0e-16, 1.0e-12, 1.0e-12, 1.0e-12, 1.0e-3])
 
 # GPS Simulation Span
 startWeek   = 2170
@@ -58,5 +58,5 @@ ukf = UKF(xhat0, P0, Q, (σρ^2 + 3*σr^2), σa^2, ts, gpsΔt, gpssim, imusim, s
 
 runFilter!(ukf)
 
-# ===== MC Plots
-plotMC(ukf, em, ev, length(ukf.txp))
+# ===== Save MC data for plottign
+saveMCmat(ukf, em, ev, length(ukf.txp))

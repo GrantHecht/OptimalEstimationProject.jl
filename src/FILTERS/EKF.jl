@@ -622,61 +622,84 @@ function plotMC(ekf::EKF, em, ev, n)
     s366mc  = $σ366mc;
     s377    = $σ377;
     s377mc  = $σ377mc;
+    em      = $em;
 
     figure()
     subplot(3,1,1)
-    plot(ts, es(:,1), 'k')
+    plot(ts, es(:,1).*1000, 'k')
     hold on
-    plot(ts, s311, 'r')
-    plot(ts, -s311, 'r')
-    plot(ts, s311mc, '--r')
-    plot(ts, -s311mc, '--r')
-    legend('Estimation Error', 'EKF \$3\\sigma\$', 'Interpreter', 'latex')
+    plot(ts, s311.*1000, 'r')
+    plot(ts, -s311.*1000, 'r')
+    plot(ts, s311mc.*1000, '--r')
+    plot(ts, -s311mc.*1000, '--r')
+    legend('Estimation Error', 'EKF \$3\\sigma\$', 'MC \$3\\sigma\$','Interpreter', 'latex')
+    ylabel('\$e_{r_x}\$, m', 'Interpreter', 'latex')
+
+%    ylim([-1000, 1000])
     grid on
 
     subplot(3,1,2)
-    plot(ts, es(:,1), 'k')
+    plot(ts, es(:,1).*1000, 'k')
     hold on
-    plot(ts, s322, 'r')
-    plot(ts, -s322, 'r')
-    plot(ts, s322mc, '--r')
-    plot(ts, -s322mc, '--r')
+    plot(ts, s322.*1000, 'r')
+    plot(ts, -s322.*1000, 'r')
+    plot(ts, s322mc.*1000, '--r')
+    plot(ts, -s322mc.*1000, '--r')
+    ylabel('\$e_{r_y}\$, m', 'Interpreter', 'latex')
+
+%    ylim([-1000, 1000])
     grid on
 
     subplot(3,1,3)
-    plot(ts, es(:,3), 'k')
+    plot(ts, es(:,3).*1000, 'k')
     hold on
-    plot(ts, s333, 'r')
-    plot(ts, -s333, 'r')
-    plot(ts, s333mc, '--r')
-    plot(ts, -s333mc, '--r')
-    xlabel("Time, days")
+    plot(ts, s333.*1000, 'r')
+    plot(ts, -s333.*1000, 'r')
+    plot(ts, s333mc.*1000, '--r')
+    plot(ts, -s333mc.*1000, '--r')
+    xlabel('Time, days')
+    ylabel('\$e_{r_z}\$, m', 'Interpreter', 'latex')
+
     grid on
 
     figure()
     subplot(3,1,1)
-    plot(ts, es(:,4), 'k')
+    plot(ts, es(:,4).*1000, 'k')
     hold on
-    plot(ts, s344, 'r')
-    plot(ts, -s344, 'r')
-    plot(ts, s344mc, '--r')
-    plot(ts, -s344mc, '--r')
+    plot(ts, s344.*1000, 'r')
+    plot(ts, -s344.*1000, 'r')
+    plot(ts, s344mc.*1000, '--r')
+    plot(ts, -s344mc.*1000, '--r')
+    legend('Estimation Error', 'UKF \$3\\sigma\$', 'MC \$3\\sigma\$','Interpreter', 'latex')
+    ylabel('\$e_{v_x}\$, m/s', 'Interpreter', 'latex')
+
+    ylim([-1, 1])
+    grid on
 
     subplot(3,1,2)
-    plot(ts, es(:,5), 'k')
+    plot(ts, es(:,5).*1000, 'k')
     hold on
-    plot(ts, s355, 'r')
-    plot(ts, -s355, 'r')
-    plot(ts, s355mc, '--r')
-    plot(ts, -s355mc, '--r')
+    plot(ts, s355.*1000, 'r')
+    plot(ts, -s355.*1000, 'r')
+    plot(ts, s355mc.*1000, '--r')
+    plot(ts, -s355mc.*1000, '--r')
+    ylabel('\$e_{v_y}\$, m/s', 'Interpreter', 'latex')
+
+    ylim([-1.5, 1.5])
+    grid on
 
     subplot(3,1,3)
-    plot(ts, es(:,6), 'k')
+    plot(ts, es(:,6).*1000, 'k')
     hold on
-    plot(ts, s366, 'r')
-    plot(ts, -s366, 'r')
-    plot(ts, s366mc, '--r')
-    plot(ts, -s366mc, '--r')
+    plot(ts, s366.*1000, 'r')
+    plot(ts, -s366.*1000, 'r')
+    plot(ts, s366mc.*1000, '--r')
+    plot(ts, -s366mc.*1000, '--r')
+    xlabel('Time, days')
+    ylabel('\$e_{v_z}\$, m/s', 'Interpreter', 'latex')
+
+    ylim([-1, 1])
+    grid on
 
     figure()
     plot(ts, es(:,7), 'k')
@@ -685,7 +708,115 @@ function plotMC(ekf::EKF, em, ev, n)
     plot(ts, -s377, 'r')
     plot(ts, s377mc, '--r')
     plot(ts, -s377mc, '--r')
+    xlabel('Time, days')
+    ylabel('\$e_m\$, kg', 'Interpreter', 'latex')
+    legend('Estimation Error', 'UKF \$3\\sigma\$', 'MC \$3\\sigma\$','Interpreter', 'latex')
+
+    grid on
+
+    figure()
+    histogram(em(:,1).*1000, 20)
+    hold on
+    xline(mean(em(:,1))*1000, '--k', 'LineWidth', 3) 
+    xlabel('\$e_{r_x}\$, m', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,2).*1000, 20)
+    hold on
+    xline(mean(em(:,2))*1000, '--k', 'LineWidth', 3)
+    xlabel('\$e_{r_y}\$, m', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,3).*1000, 20)
+    hold on
+    xline(mean(em(:,3))*1000, '--k', 'LineWidth', 3)
+    xlabel('\$e_{r_z}\$, m', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,4).*1000, 20)
+    hold on
+    xline(mean(em(:,4))*1000, '--k', 'LineWidth', 3) 
+    xlabel('\$e_{v_x}\$, m/s', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,5).*1000, 20)
+    hold on
+    xline(mean(em(:,5))*1000, '--k', 'LineWidth', 3)
+    xlabel('\$e_{v_y}\$, m/s', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,6).*1000, 30)
+    hold on
+    xline(mean(em(:,6))*1000, '--k', 'LineWidth', 3)
+    xlabel('\$e_{v_z}\$, m/s', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
+
+    figure()
+    histogram(em(:,7), 20)
+    hold on
+    xline(mean(em(:,7)), '--k', 'LineWidth', 3)
+    xlabel('\$e_m\$, m/s', 'Interpreter', 'latex')
+    ylabel('# Occurances')
+    grid on
 
     """
 end
 
+function saveMCmat(ekf::EKF, em, ev, n)
+    ts      = ekf.txp[1:n]
+    xhat    = ekf.xhats[1:n, :]
+    es      = ekf.es[1:n, :]
+    σ311    = 3*sqrt.(ekf.Ps[1:n,1])
+    σ311mc  = 3*sqrt.(ev[:,1])
+    σ322    = 3*sqrt.(ekf.Ps[1:n,2])
+    σ322mc  = 3*sqrt.(ev[:,2])
+    σ333    = 3*sqrt.(ekf.Ps[1:n,3])
+    σ333mc  = 3*sqrt.(ev[:,3])
+    σ344    = 3*sqrt.(ekf.Ps[1:n,4])
+    σ344mc  = 3*sqrt.(ev[:,4])
+    σ355    = 3*sqrt.(ekf.Ps[1:n,5])
+    σ355mc  = 3*sqrt.(ev[:,5])
+    σ366    = 3*sqrt.(ekf.Ps[1:n,6])
+    σ366mc  = 3*sqrt.(ev[:,6])
+    σ377    = 3*sqrt.(ekf.Ps[1:n,7])
+    σ377mc  = 3*sqrt.(ev[:,7])
+
+    fname   = datadir("MATLABdata","ekf.mat")
+
+    mat"""
+    ts      = $ts;
+    ts      = (ts - $(ekf.scSim.t0))/86400;
+    xhat    = $xhat;
+    es      = $es;
+    s311    = $σ311;
+    s311mc  = $σ311mc;
+    s322    = $σ322;
+    s322mc  = $σ322mc;
+    s333    = $σ333;
+    s333mc  = $σ333mc;
+    s344    = $σ344;
+    s344mc  = $σ344mc;
+    s355    = $σ355;
+    s355mc  = $σ355mc;
+    s366    = $σ366;
+    s366mc  = $σ366mc;
+    s377    = $σ377;
+    s377mc  = $σ377mc;
+    em      = $em;
+
+    save($fname)
+    """
+
+    return nothing
+end
